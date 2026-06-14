@@ -1346,6 +1346,15 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
   }
 }
 
+// Cache for voices to handle mobile async loading
+let cachedVoices = [];
+function initVoices() {
+  cachedVoices = window.speechSynthesis.getVoices();
+}
+// Load voices on startup and when they change (mobile compatibility)
+initVoices();
+if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = initVoices;
+
 function speakText(text) {
   if (!window.speechSynthesis) {
     toast("Speech not supported");
@@ -1355,7 +1364,7 @@ function speakText(text) {
   window.speechSynthesis.cancel();
 
   // Show stop button immediately for instant mobile feedback
-  const stopBtn = document.getElementById('stopVoiceBtn');
+  const stopBtn = window.document.getElementById('stopVoiceBtn');
   if (stopBtn) stopBtn.style.display = 'flex';
 
   // Immediate invocation to minimize latency
@@ -1368,11 +1377,14 @@ function speakText(text) {
   const u = new SpeechSynthesisUtterance(cleanText);
   u.lang = 'en-US'; // Explicitly set lang for mobile compatibility
 
-  const voices = window.speechSynthesis.getVoices();
+  // Use cached voices, with fallback to live fetch for mobile
+  let voices = cachedVoices.length > 0 ? cachedVoices : window.speechSynthesis.getVoices();
+  
   // Selection logic for a "sweeter" voice (prioritizing high-quality female voices)
   const preferred = ["Google UK English Female", "Samantha", "Victoria", "Microsoft Zira", "Google US English"];
   const voice = voices.find(v => preferred.some(p => v.name.includes(p)))
-             || voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural')));
+             || voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural')))
+             || voices.find(v => v.lang.startsWith('en'));
   if (voice) u.voice = voice;
   u.pitch = 1.15; // Slightly higher pitch for a "sweeter", friendlier tone
   u.rate = 1.0;   // Keep speed natural
@@ -1409,7 +1421,7 @@ function typeText(el, text, cb){
 }
 
 /* ══════════ VOICE STOP ══════════ */
-$('stopVoiceBtn').onclick=()=>{ speechSynthesis.cancel(); $('stopVoiceBtn').style.display='none'; };
+$('stopVoiceBtn').onclick=()=>{ window.speechSynthesis.cancel(); $('stopVoiceBtn').style.display='none'; };
 
 /* ══════════ TYPING INDICATOR ══════════ */
 function showTyping(){
