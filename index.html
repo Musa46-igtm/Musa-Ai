@@ -1646,15 +1646,6 @@ async function doSend(){
   callAI(val, imgDataUrl);
 }
 
-  chatMsgs.push({role:'user',text:val,img:imgDataUrl||null});
-  await saveChat();
-
-  renderMsg(val,'user',true,imgDataUrl);
-  $('inp').value=''; $('inp').style.height='auto'; updateSendBtn();
-  const typing=showTyping();
-  await callAI(val,imgDataUrl,false,typing);
-}
-
 async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
   if(!typingEl){ typingEl=showTyping(); }
   const sys=buildSysPrompt();
@@ -1791,23 +1782,26 @@ async function addFollowups(aiText){
 
 /* ══════════ SEND BTN STATE ══════════ */
 function setBusy(state){
-  const btn=$('sendBtn'), inp=$('inp');
-  inp.disabled=state;
-  inp.placeholder=state?'Generating…':'Message Musa AI…';
-  if(state){
-    btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
-    btn.disabled=false;
-    // During generation, clicking does nothing harmful
-    btn.onclick=()=>{ toast('Generating…'); };
+  busy = state;
+  const btn = $('sendBtn'), inp = $('inp');
+  inp.disabled = state;
+  inp.placeholder = state ? 'Generating…' : 'Message Musa AI…';
+  
+  if (state) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+    btn.disabled = true;
   } else {
-    btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 4v16M12 4L6 10M12 4l6 6"/></svg>';
-    btn.disabled=!$('inp').value.trim()&&!attachments.length;
-    btn.onclick=null; // falls through to the global listener below
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 4v16M12 4L6 10M12 4l6 6"/></svg>';
+    updateSendBtn();
   }
 }
 
 function updateSendBtn(){
-  if(!busy) $('sendBtn').disabled=!$('inp').value.trim()&&!attachments.length;
+  if (busy) return;
+  const btn = $('sendBtn');
+  const hasText = $('inp').value.trim().length > 0;
+  const hasAttachments = attachments.length > 0;
+  btn.disabled = !(hasText || hasAttachments);
 }
 
 /* ══════════ SEND BUTTON — guaranteed to fire on touch & click ══════════ */
@@ -1823,6 +1817,9 @@ function handleSendTrigger(e){
 }
 $('sendBtn').addEventListener('pointerup', handleSendTrigger);
 $('sendBtn').addEventListener('click', handleSendTrigger);
+
+// Initialize send button state on page load
+setTimeout(() => { updateSendBtn(); }, 50);
 
 /* ══════════ INPUT AUTO-RESIZE ══════════ */
 function autoResize(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,160)+'px'; }
