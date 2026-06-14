@@ -783,14 +783,6 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
             <span class="model-dot gpt"></span>
             <div><div class="model-opt-name">GPT-4o</div><div class="model-opt-sub">Smarter · Complex tasks</div></div>
           </div>
-          <div class="model-opt" data-model="claude-3-haiku" data-dot="claude">
-            <span class="model-dot claude"></span>
-            <div><div class="model-opt-name">Claude 3 Haiku</div><div class="model-opt-sub">Fast · Reliable</div></div>
-          </div>
-          <div class="model-opt" data-model="meta-llama-3-70b-instruct" data-dot="gemini">
-            <span class="model-dot gemini"></span>
-            <div><div class="model-opt-name">Llama 3 70B</div><div class="model-opt-sub">Powerful · Logic</div></div>
-          </div>
         </div>
       </div>
       <!-- Mode chip in header -->
@@ -910,8 +902,6 @@ const $ = id => document.getElementById(id);
 const MODELS = {
   'gpt-4o-mini':       { label:'GPT-4o Mini',        dot:'musa' },
   'gpt-4o':            { label:'GPT-4o',              dot:'gpt' },
-  'claude-3-haiku':    { label:'Claude 3 Haiku',     dot:'claude' },
-  'meta-llama-3-70b-instruct': { label:'Llama 3 70B', dot:'gemini' },
 };
 
 /* ══════════ TOAST ══════════ */
@@ -1286,23 +1276,14 @@ async function genTitle(msg){
 }
 
 /* ══════════ SAVE CHAT ══════════ */
-async function saveChat(uMsg, aMsg, imgDataUrl){
-  if(!user)return;
-  chatMsgs.push({role:'user',text:uMsg,img:imgDataUrl||null});
-  chatMsgs.push({role:'ai',text:aMsg});
+async function saveChat(){
+  if(!user || !chatId) return;
   const d=store();
-  if(!chatId){
-    chatId=Date.now().toString();
-    const title=uMsg.substring(0,30)+(uMsg.length>30?'…':'');
-    d.chats.push({id:chatId,title,msgs:[...chatMsgs],ts:new Date().toISOString()});
-    save(d); syncUp(); renderHistory();
-    genTitle(uMsg).then(t=>{
-      const d2=store(); const i=d2.chats.findIndex(c=>c.id===chatId);
-      if(i!==-1){d2.chats[i].title=t; save(d2); syncUp(); renderHistory();}
-    });
-  } else {
-    const i=d.chats.findIndex(c=>c.id===chatId);
-    if(i!==-1){d.chats[i].msgs=[...chatMsgs]; d.chats[i].ts=new Date().toISOString(); save(d); syncUp();}
+  const i=d.chats.findIndex(c=>c.id===chatId);
+  if(i!==-1){
+    d.chats[i].msgs=[...chatMsgs];
+    d.chats[i].ts=new Date().toISOString();
+    save(d); syncUp();
   }
 }
 
@@ -1331,9 +1312,11 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
     const target=row.querySelector('.target');
     chat.appendChild(row);
     if(animate){ typeText(target,text); } else { target.innerHTML=marked.parse(text); applyCode(target); }
-    row.querySelector('.act-copy').onclick=async()=>{ await navigator.clipboard.writeText(text).catch(()=>{}); toast('Copied!'); };
-    row.querySelector('.act-speak').onclick=()=>speakText(text);
-    row.querySelector('.act-regen').onclick=()=>{
+    const q = s => row.querySelector(s);
+    const btnCopy = q('.act-copy'), btnSpeak = q('.act-speak'), btnRegen = q('.act-regen');
+    if(btnCopy) btnCopy.onclick=async()=>{ await navigator.clipboard.writeText(text).catch(()=>{}); toast('Copied!'); };
+    if(btnSpeak) btnSpeak.onclick=()=>speakText(text);
+    if(btnRegen) btnRegen.onclick=()=>{
       if(busy)return;
       const lastUserIdx = chatMsgs.findLastIndex(m => m.role === 'user');
       if(lastUserIdx === -1) return;
@@ -1373,11 +1356,9 @@ function scrollBot(smooth=true){ $('chat').scrollTo({top:$('chat').scrollHeight,
 function typeText(el, text, cb){
   let i=0;
   function tick(){
-    const atB=atBot();
     const chunk=text.length>800?8:3;
     i=Math.min(i+chunk,text.length);
     el.innerHTML=marked.parse(text.substring(0,i))+'<span class="cursor"></span>';
-    if(atB) scrollBot(false);
     if(i<text.length){ requestAnimationFrame(tick); }
     else {
       el.innerHTML=marked.parse(text);
@@ -1520,9 +1501,10 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
       applyCode(target);
       scrollBot(true);
       devLog('Response received ('+aiText.length+' chars)','ok');
-      row.querySelector('.act-copy').onclick=async()=>{ await navigator.clipboard.writeText(aiText).catch(()=>{}); toast('Copied!'); };
-      row.querySelector('.act-speak').onclick=()=>speakText(aiText);
-      row.querySelector('.act-regen').onclick=()=>{
+      const q = s => row.querySelector(s);
+      if(q('.act-copy')) q('.act-copy').onclick=async()=>{ await navigator.clipboard.writeText(aiText).catch(()=>{}); toast('Copied!'); };
+      if(q('.act-speak')) q('.act-speak').onclick=()=>speakText(aiText);
+      if(q('.act-regen')) q('.act-regen').onclick=()=>{
         if(busy)return;
         const lastUserIdx = chatMsgs.findLastIndex(m => m.role === 'user');
         if(lastUserIdx === -1) return;
@@ -1539,7 +1521,8 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
       typingEl.remove();
       renderMsg(aiText,'ai',true);
     }
-    await saveChat(userMsg, aiText, imgDataUrl);
+    chatMsgs.push({role:'ai',text:aiText});
+    await saveChat();
     addFollowups(aiText);
   }catch(err){
     typingEl.remove();
