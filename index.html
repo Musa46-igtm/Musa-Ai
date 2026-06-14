@@ -260,7 +260,7 @@ header {
   background:var(--bg-0); border-bottom:1px solid var(--border);
   flex-shrink:0; position:relative; z-index:10;
 }
-#menuBtn { background:var(--bg-2); border:1px solid var(--border-md); color:var(--text-0); cursor:pointer; padding:8px; display:none; border-radius:8px; transition: background var(--dur); }
+#menuBtn { background:var(--bg-2); border:1px solid var(--border-md); color:var(--text-0); cursor:pointer; padding:8px; display:none; border-radius:8px; transition: background var(--dur); margin-right: 12px; }
 #menuBtn:hover { background:var(--bg-hover); }
 @media(max-width:767px) { #menuBtn { display:flex; align-items:center; justify-content:center; } }
 
@@ -783,13 +783,13 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
             <span class="model-dot gpt"></span>
             <div><div class="model-opt-name">GPT-4o</div><div class="model-opt-sub">Smarter · Complex tasks</div></div>
           </div>
-          <div class="model-opt" data-model="claude-3-haiku" data-dot="claude">
+          <div class="model-opt" data-model="claude-3-5-sonnet" data-dot="claude">
             <span class="model-dot claude"></span>
-            <div><div class="model-opt-name">Claude 3 Haiku</div><div class="model-opt-sub">Fast · Reliable</div></div>
+            <div><div class="model-opt-name">Claude 3.5 Sonnet</div><div class="model-opt-sub">Balanced · Creative</div></div>
           </div>
-          <div class="model-opt" data-model="gemini-1.5-pro" data-dot="gemini">
+          <div class="model-opt" data-model="gemini-1.5-flash" data-dot="gemini">
             <span class="model-dot gemini"></span>
-            <div><div class="model-opt-name">Gemini 1.5 Pro</div><div class="model-opt-sub">Complex Reasoning</div></div>
+            <div><div class="model-opt-name">Gemini 1.5 Flash</div><div class="model-opt-sub">Fast · Multimodal</div></div>
           </div>
         </div>
       </div>
@@ -910,8 +910,8 @@ const $ = id => document.getElementById(id);
 const MODELS = {
   'gpt-4o-mini':       { label:'GPT-4o mini',        dot:'musa' },
   'gpt-4o':            { label:'GPT-4o',              dot:'gpt' },
-  'claude-3-haiku':    { label:'Claude 3 Haiku',     dot:'claude' },
-  'gemini-1.5-pro':    { label:'Gemini 1.5 Pro',     dot:'gemini' },
+  'claude-3-5-sonnet': { label:'Claude 3.5 Sonnet',   dot:'claude' },
+  'gemini-1.5-flash':  { label:'Gemini 1.5 Flash',    dot:'gemini' },
 };
 
 /* ══════════ TOAST ══════════ */
@@ -1335,9 +1335,12 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
     row.querySelector('.act-speak').onclick=()=>speakText(text);
     row.querySelector('.act-regen').onclick=()=>{
       if(busy)return;
-      const lastUser=chatMsgs.filter(m=>m.role==='user').pop(); if(!lastUser)return;
-      row.remove(); chatMsgs=chatMsgs.slice(0,-2);
-      callAI(lastUser.text,null,true);
+      const lastUserIdx = chatMsgs.findLastIndex(m => m.role === 'user');
+      if(lastUserIdx === -1) return;
+      const lastUser = chatMsgs[lastUserIdx];
+      row.remove(); 
+      chatMsgs = chatMsgs.slice(0, lastUserIdx);
+      callAI(lastUser.text, lastUser.img, true);
     };
   } else {
     let imgHtml='';
@@ -1519,6 +1522,15 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
       devLog('Response received ('+aiText.length+' chars)','ok');
       row.querySelector('.act-copy').onclick=async()=>{ await navigator.clipboard.writeText(aiText).catch(()=>{}); toast('Copied!'); };
       row.querySelector('.act-speak').onclick=()=>speakText(aiText);
+      row.querySelector('.act-regen').onclick=()=>{
+        if(busy)return;
+        const lastUserIdx = chatMsgs.findLastIndex(m => m.role === 'user');
+        if(lastUserIdx === -1) return;
+        const lastUser = chatMsgs[lastUserIdx];
+        row.remove(); 
+        chatMsgs = chatMsgs.slice(0, lastUserIdx);
+        callAI(lastUser.text, lastUser.img, true);
+      };
     } else {
       if(typeof res==='string') aiText=res;
       else if(res?.message?.content) aiText=Array.isArray(res.message.content)?res.message.content[0].text:res.message.content;
