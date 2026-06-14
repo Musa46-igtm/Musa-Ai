@@ -245,8 +245,7 @@ button,input,textarea,select { font-family:var(--font); }
 .pm-item:hover { background:var(--bg-hover-strong); }
 .pm-item.red { color:var(--red); }
 
-/* Mode badge styles */
-.pm-item.mode-active { background:var(--accent-soft); color:var(--accent); }
+.pm-item.mode-active { opacity:0.5; pointer-events:none; cursor:default; filter:grayscale(1); }
 .mode-dot {
   width:8px; height:8px; border-radius:50%; flex-shrink:0;
 }
@@ -784,13 +783,13 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
             <span class="model-dot gpt"></span>
             <div><div class="model-opt-name">GPT-4o</div><div class="model-opt-sub">Smarter · Complex tasks</div></div>
           </div>
-          <div class="model-opt" data-model="claude-3-5-sonnet" data-dot="claude">
+          <div class="model-opt" data-model="claude-3-haiku" data-dot="claude">
             <span class="model-dot claude"></span>
-            <div><div class="model-opt-name">Claude 3.5 Sonnet</div><div class="model-opt-sub">Reasoning · Code</div></div>
+            <div><div class="model-opt-name">Claude 3 Haiku</div><div class="model-opt-sub">Fast · Reliable</div></div>
           </div>
-          <div class="model-opt" data-model="gemini-1.5-flash" data-dot="gemini">
+          <div class="model-opt" data-model="gemini-1.5-pro" data-dot="gemini">
             <span class="model-dot gemini"></span>
-            <div><div class="model-opt-name">Gemini 1.5 Flash</div><div class="model-opt-sub">Fast · Versatile</div></div>
+            <div><div class="model-opt-name">Gemini 1.5 Pro</div><div class="model-opt-sub">Complex Reasoning</div></div>
           </div>
         </div>
       </div>
@@ -911,8 +910,8 @@ const $ = id => document.getElementById(id);
 const MODELS = {
   'gpt-4o-mini':       { label:'GPT-4o mini',        dot:'musa' },
   'gpt-4o':            { label:'GPT-4o',              dot:'gpt' },
-  'claude-3-5-sonnet': { label:'Claude 3.5 Sonnet',   dot:'claude' },
-  'gemini-1.5-flash':  { label:'Gemini 1.5 Flash',    dot:'gemini' },
+  'claude-3-haiku':    { label:'Claude 3 Haiku',     dot:'claude' },
+  'gemini-1.5-pro':    { label:'Gemini 1.5 Pro',     dot:'gemini' },
 };
 
 /* ══════════ TOAST ══════════ */
@@ -937,6 +936,7 @@ function devLog(msg, type='') {
 
 /* ══════════ MODE SYSTEM ══════════ */
 function setMode(m) {
+  if (currentMode === m) return;
   if (chatId || chatMsgs.length > 0) {
     chatId = null;
     chatMsgs = [];
@@ -1332,13 +1332,7 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
     chat.appendChild(row);
     if(animate){ typeText(target,text); } else { target.innerHTML=marked.parse(text); applyCode(target); }
     row.querySelector('.act-copy').onclick=async()=>{ await navigator.clipboard.writeText(text).catch(()=>{}); toast('Copied!'); };
-    row.querySelector('.act-speak').onclick=()=>{ 
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text.replace(/[*_`#]/g,''));
-      u.onstart = () => $('stopVoiceBtn').style.display = 'flex';
-      u.onend = () => $('stopVoiceBtn').style.display = 'none';
-      speechSynthesis.speak(u); 
-    };
+    row.querySelector('.act-speak').onclick=()=>speakText(text);
     row.querySelector('.act-regen').onclick=()=>{
       if(busy)return;
       const lastUser=chatMsgs.filter(m=>m.role==='user').pop(); if(!lastUser)return;
@@ -1357,6 +1351,15 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
     chat.appendChild(row);
     scrollBot();
   }
+}
+
+function speakText(text) {
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(/[*_`#]/g,''));
+  u.onstart = () => { $('stopVoiceBtn').style.display = 'flex'; };
+  u.onend = () => { $('stopVoiceBtn').style.display = 'none'; };
+  u.onerror = () => { $('stopVoiceBtn').style.display = 'none'; };
+  speechSynthesis.speak(u);
 }
 
 /* ══════════ SCROLL ══════════ */
@@ -1515,13 +1518,7 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
       scrollBot(true);
       devLog('Response received ('+aiText.length+' chars)','ok');
       row.querySelector('.act-copy').onclick=async()=>{ await navigator.clipboard.writeText(aiText).catch(()=>{}); toast('Copied!'); };
-      row.querySelector('.act-speak').onclick=()=>{ 
-        speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(aiText.replace(/[*_`#]/g,''));
-        u.onstart = () => $('stopVoiceBtn').style.display = 'flex';
-        u.onend = () => $('stopVoiceBtn').style.display = 'none';
-        speechSynthesis.speak(u); 
-      };
+      row.querySelector('.act-speak').onclick=()=>speakText(aiText);
     } else {
       if(typeof res==='string') aiText=res;
       else if(res?.message?.content) aiText=Array.isArray(res.message.content)?res.message.content[0].text:res.message.content;
