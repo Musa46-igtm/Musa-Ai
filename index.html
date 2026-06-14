@@ -204,8 +204,9 @@ button,input,textarea,select { font-family:var(--font); }
 #ctxMenu {
   position:fixed; background:var(--bg-3); border:1px solid var(--border-md);
   border-radius:var(--r-md); padding:6px; min-width:168px; z-index:9999;
-  box-shadow:0 12px 40px rgba(0,0,0,0.5); display:none; flex-direction:column; gap:2px;
-  transform-origin:top left;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+  display:none; flex-direction:column; gap:2px; transform-origin:top left;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
 }
 #ctxMenu.on { display:flex; animation:popIn 0.13s var(--ease) both; }
 @keyframes popIn { from { opacity:0; transform:scale(0.93) translateY(-4px); } to { opacity:1; transform:scale(1); } }
@@ -235,7 +236,8 @@ button,input,textarea,select { font-family:var(--font); }
 .sb-profile-menu {
   position:absolute; bottom:calc(100% + 6px); left:12px; right:12px;
   background:var(--bg-3); border:1px solid var(--border-md); border-radius:var(--r-md);
-  padding:6px; box-shadow:0 8px 24px rgba(0,0,0,0.35); display:none; flex-direction:column; gap:2px;
+  padding:6px; box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+  display:none; flex-direction:column; gap:2px; backdrop-filter: blur(12px);
 }
 .sb-profile-menu.on { display:flex; }
 .pm-item {
@@ -793,6 +795,9 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
       <button class="hdr-btn" id="searchToggleBtn" title="Web search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </button>
+      <button class="hdr-btn" id="backToNormBtn" title="Back to Norm Mode" style="display:none; color:var(--amber);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </button>
       <button class="hdr-btn" id="stopVoiceBtn" title="Stop speaking" style="display:none; color:var(--red);">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
       </button>
@@ -852,12 +857,6 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
 
   <!-- Dev panel (shown in dev/root mode) -->
   <div class="dev-panel" id="devPanel"></div>
-
-  <!-- Shell/Preview Panel -->
-  <div id="shellContainer">
-    <div class="shell-hdr"><span>Live Shell/Preview</span><button class="shell-close" id="closeShell">×</button></div>
-    <div class="shell-body" id="shellBody"></div>
-  </div>
 
   <div class="input-zone">
     <div class="input-box" id="inputBox">
@@ -940,6 +939,8 @@ function setMode(m) {
   chip.textContent=m.toUpperCase();
   // Banner
   $('rootBanner').classList.toggle('on', m==='root');
+  // Back to norm button
+  $('backToNormBtn').style.display = m === 'norm' ? 'none' : 'flex';
   // Dev panel
   $('devPanel').classList.toggle('on', m==='dev'||m==='root');
   if(m==='dev'||m==='root') {
@@ -959,6 +960,7 @@ function setMode(m) {
 $('pmNorm').onclick=()=>setMode('norm');
 $('pmDev').onclick=()=>setMode('dev');
 $('pmRoot').onclick=()=>setMode('root');
+$('backToNormBtn').onclick=()=>setMode('norm');
 
 /* ══════════ STORAGE ══════════ */
 function store()   { if(!user)return{chats:[]}; return JSON.parse(localStorage.getItem('musa2_'+user)||'{"chats":[]}'); }
@@ -1372,7 +1374,6 @@ function typeText(el, text, cb){
 
 /* ══════════ VOICE STOP ══════════ */
 $('stopVoiceBtn').onclick=()=>{ speechSynthesis.cancel(); $('stopVoiceBtn').style.display='none'; };
-$('closeShell').onclick=()=>$('shellContainer').classList.remove('on');
 
 /* ══════════ TYPING INDICATOR ══════════ */
 function showTyping(){
@@ -1413,12 +1414,8 @@ function applyCode(container){
       if(lang==='javascript'||lang==='js'){
         content=`<!DOCTYPE html><html><body style="background:#111;color:#eee;font-family:monospace;padding:20px"><script>${raw}<\/script></body></html>`;
       }
-      $('shellBody').innerHTML = '';
-      const frame = document.createElement('iframe');
-      frame.className = 'run-frame';
-      frame.src = URL.createObjectURL(new Blob([content],{type:'text/html'}));
-      $('shellBody').appendChild(frame);
-      $('shellContainer').classList.add('on');
+      const blob = new Blob([content], {type: 'text/html'});
+      window.open(URL.createObjectURL(blob), '_blank');
     };
   });
 }
