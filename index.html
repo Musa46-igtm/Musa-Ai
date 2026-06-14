@@ -1516,8 +1516,6 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
         if(now - lastRender > 64) { // Throttled rendering to prevent lag
           target.innerHTML=marked.parse(aiText)+'<span class="cursor"></span>';
           lastRender = now;
-          // Auto-open shell if code block is detected
-          if(aiText.includes('```')) $('shellContainer').classList.add('on');
         }
       }
       target.innerHTML=marked.parse(aiText);
