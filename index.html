@@ -1347,26 +1347,43 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
 }
 
 function speakText(text) {
-  speechSynthesis.cancel();
+  if (!window.speechSynthesis) {
+    toast("Speech not supported");
+    return;
+  }
+
+  window.speechSynthesis.cancel();
 
   // Show stop button immediately for instant mobile feedback
-  if ($('stopVoiceBtn')) $('stopVoiceBtn').style.display = 'flex';
+  const stopBtn = document.getElementById('stopVoiceBtn');
+  if (stopBtn) stopBtn.style.display = 'flex';
 
   // Immediate invocation to minimize latency
-  const u = new SpeechSynthesisUtterance(text.replace(/[*_`#]/g, ''));
+  const cleanText = text.replace(/[*_`#]/g, '').trim();
+  if (!cleanText) {
+    if (stopBtn) stopBtn.style.display = 'none';
+    return;
+  }
+
+  const u = new SpeechSynthesisUtterance(cleanText);
   u.lang = 'en-US'; // Explicitly set lang for mobile compatibility
 
-  const voices = speechSynthesis.getVoices();
+  const voices = window.speechSynthesis.getVoices();
   // Selection logic for a "sweeter" voice (prioritizing high-quality female voices)
-  const preferred = ["Google UK English Female", "Microsoft Zira", "Samantha", "Victoria", "Google US English"];
+  const preferred = ["Google UK English Female", "Samantha", "Victoria", "Microsoft Zira", "Google US English"];
   const voice = voices.find(v => preferred.some(p => v.name.includes(p)))
              || voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural')));
   if (voice) u.voice = voice;
   u.pitch = 1.15; // Slightly higher pitch for a "sweeter", friendlier tone
   u.rate = 1.0;   // Keep speed natural
-  u.onend = () => { $('stopVoiceBtn').style.display = 'none'; };
-  u.onerror = () => { $('stopVoiceBtn').style.display = 'none'; };
-  speechSynthesis.speak(u);
+  u.onend = () => { if (stopBtn) stopBtn.style.display = 'none'; };
+  u.onerror = () => { if (stopBtn) stopBtn.style.display = 'none'; };
+
+  // Small delay and resume() to fix common mobile/Chrome "stuck" bugs
+  setTimeout(() => {
+    window.speechSynthesis.resume();
+    window.speechSynthesis.speak(u);
+  }, 50);
 }
 
 /* ══════════ SCROLL ══════════ */
@@ -1526,6 +1543,15 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
       row.innerHTML=`<div class="msg-inner"><div class="ai-av"><svg viewBox="0 0 44 44"><path d="M22 2L38.17 11.5L38.17 30.5L22 40L5.83 30.5L5.83 11.5Z"/><path d="M14 29L14 17L22 25.5L30 17L30 29" stroke="var(--bg-0)" stroke-width="3" fill="none"/></svg></div><div class="msg-body"><div class="msg-meta"><span class="msg-name">Musa AI</span>${modelTag}<span class="msg-time">${now}</span></div><div class="msg-prose target"></div><div class="msg-actions"><button class="msg-act act-copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button><button class="msg-act act-regen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Retry</button><button class="msg-act act-speak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Speak</button></div></div></div>`;
       $('chat').appendChild(row);
       const target=row.querySelector('.target');
+      const q = s => row.querySelector(s);
+
+      // Wire up buttons immediately so they work during streaming
+      if(q('.act-copy')) q('.act-copy').onclick=async()=>{ await navigator.clipboard.writeText(aiText).catch(()=>{}); toast('Copied!'); };
+      if(q('.act-speak')) q('.act-speak').onclick=()=>speakText(aiText);
+      if(q('.act-regen')) q('.act-regen').onclick=()=>{
+        if(busy)return;
+        toast("Wait for response to finish...");
+      };
 
       let lastRender = 0;
       for await(const chunk of res){
@@ -1541,10 +1567,10 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
       applyCode(target);
       scrollBot(true);
       devLog('Response received ('+aiText.length+' chars)','ok');
-      const q = s => row.querySelector(s);
-      if(q('.act-copy')) q('.act-copy').onclick=async()=>{ await navigator.clipboard.writeText(aiText).catch(()=>{}); toast('Copied!'); };
-      if(q('.act-speak')) q('.act-speak').onclick=()=>speakText(aiText);
-      if(q('.act-regen')) q('.act-regen').onclick=()=>{
+
+      // Re-wire regen once finished
+      const btnRegen = q('.act-regen');
+      if(btnRegen) btnRegen.onclick=()=>{
         if(busy)return;
         const lastUserIdx = chatMsgs.findLastIndex(m => m.role === 'user');
         if(lastUserIdx === -1) return;
