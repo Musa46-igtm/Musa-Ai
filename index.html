@@ -1013,6 +1013,24 @@ async function authOK(id) {
   await syncDown();
   renderHistory();
   setGreeting();
+
+  // Fix lingering "Naming..." placeholders from interrupted sessions
+  const d = store();
+  if (d.chats.some(c => c.title === 'Naming...')) {
+    (async () => {
+      let updated = false;
+      const currentChats = store().chats;
+      for (const c of currentChats) {
+        if (c.title === 'Naming...' && c.msgs.length > 0) {
+          const newT = await genTitle(c.msgs[0].text);
+          const d2 = store();
+          const idx = d2.chats.findIndex(ch => ch.id === c.id);
+          if (idx !== -1) { d2.chats[idx].title = newT; save(d2); updated = true; }
+        }
+      }
+      if (updated) { syncUp(); renderHistory(); }
+    })();
+  }
 }
 
 $('googleBtn').onclick = async()=>{
@@ -1083,7 +1101,10 @@ $('searchToggleBtn').onclick=()=>{
 /* ══════════ GREETING ══════════ */
 function setGreeting(){
   const h=new Date().getHours();
-  const g=h<12?'Good morning':h<18?'Good afternoon':'Good evening';
+  let g = 'Good night';
+  if (h >= 5 && h < 12) g = 'Good morning';
+  else if (h >= 12 && h < 17) g = 'Good afternoon';
+  else if (h >= 17 && h < 21) g = 'Good evening';
   $('wGreet').textContent=g+'. How can I help?';
 }
 
@@ -1610,14 +1631,12 @@ async function doSend(){
   updateSendBtn();
 
   chatMsgs.push({ role: 'user', text: val, img: imgDataUrl });
-  renderMsg(val, 'user', false, imgDataUrl);
-  scrollBot(true);
-
   if (!chatId) {
     chatId = Date.now().toString();
     const d = store();
-    d.chats.push({ id: chatId, title: 'Naming...', msgs: [], ts: new Date().toISOString() });
+    d.chats.push({ id: chatId, title: 'Naming...', msgs: [...chatMsgs], ts: new Date().toISOString() });
     save(d);
+    syncUp();
     renderHistory();
     genTitle(val).then(t => {
       const d2 = store();
@@ -1625,6 +1644,7 @@ async function doSend(){
       if (i !== -1) {
         d2.chats[i].title = t;
         save(d2);
+        syncUp();
         const titleEl = document.querySelector(`.sb-item[data-id="${chatId}"] .sb-title`);
         if (titleEl) {
           let j = 0;
@@ -1641,7 +1661,12 @@ async function doSend(){
         }
       }
     });
+  } else {
+    await saveChat();
   }
+
+  renderMsg(val, 'user', false, imgDataUrl);
+  scrollBot(true);
 
   callAI(val, imgDataUrl);
 }
