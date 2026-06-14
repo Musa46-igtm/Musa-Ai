@@ -621,13 +621,6 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
 }
 .in-btn.recording { color:var(--red) !important; animation:voicePulse 1.2s ease-in-out infinite; }
 
-/* Run frame */
-#shellContainer { display:none; flex-direction:column; border-top:1px solid var(--border); background:var(--bg-1); height:40%; transition: height 0.3s; }
-#shellContainer.on { display:flex; }
-.shell-hdr { padding:8px 16px; background:var(--bg-2); display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:600; border-bottom:1px solid var(--border); }
-.shell-close { cursor:pointer; background:none; border:none; color:var(--text-2); font-size:16px; }
-.shell-body { flex:1; position:relative; }
-
 .run-frame { width:100%; height:320px; border-radius:var(--r-md); border:1px solid var(--border); margin-top:8px; background:#fff; }
 
 /* Follow-up chips */
@@ -1069,19 +1062,21 @@ function setGreeting(){
 /* ══════════ SCREEN TRANSITIONS ══════════ */
 function showWelcome(){
   const w=$('welcome'), c=$('chatWrap');
-  w.classList.remove('out','gone');
-  c.classList.remove('in');
-  setTimeout(()=>c.classList.add('gone'),300);
+  if(w) w.classList.remove('out','gone');
+  if(c) c.classList.remove('in');
+  setTimeout(() => { if($('chatWrap')) $('chatWrap').classList.add('gone'); }, 300);
   setGreeting();
   renderHistory();
 }
 function showChat(anim=true){
   const w=$('welcome'), c=$('chatWrap');
-  if(anim&&!w.classList.contains('gone')){
-    w.classList.add('out');
-    setTimeout(()=>w.classList.add('gone'),280);
-  } else { w.classList.add('gone'); }
-  c.classList.remove('gone');
+  if(w) {
+    if(anim && !w.classList.contains('gone')){
+      w.classList.add('out');
+      setTimeout(()=>w.classList.add('gone'),280);
+    } else { w.classList.add('gone'); }
+  }
+  if(c) c.classList.remove('gone');
   requestAnimationFrame(()=>requestAnimationFrame(()=>c.classList.add('in')));
 }
 
@@ -1432,7 +1427,6 @@ async function doSend(){
   attachments=[]; renderAttachPreview();
 
   showChat(true);
-
   if(!chatId){
     chatId = Date.now().toString();
     const d = store();
@@ -1473,7 +1467,8 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
 
   let webContext = "";
   if(webSearch){
-    $('fetchingIndicator').classList.add('on');
+    const indicator = $('fetchingIndicator');
+    if(indicator) indicator.classList.add('on');
     try {
       const searchResults = await puter.browser.search(userMsg);
       webContext = "\n\nWEB SEARCH RESULTS:\n" + searchResults.map(r => `Source: ${r.url}\nTitle: ${r.title}\nSnippet: ${r.snippet}`).join('\n---\n');
@@ -1481,7 +1476,7 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
     } catch(e) {
       devLog('Web search failed: ' + e.message, 'err');
     } finally {
-      $('fetchingIndicator').classList.remove('on');
+      if(indicator) indicator.classList.remove('on');
     }
   }
 
@@ -1546,7 +1541,7 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
     await saveChat();
     addFollowups(aiText);
   }catch(err){
-    typingEl.remove();
+    if(typingEl) typingEl.remove();
     renderMsg('Sorry, something went wrong: '+(err.message||'Unknown error'),'ai',true);
     devLog('Error: '+err.message,'err');
     console.error(err);
