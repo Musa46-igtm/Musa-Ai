@@ -1431,8 +1431,34 @@ async function doSend(){
   busy=true; setBusy(true);
   attachments=[]; renderAttachPreview();
 
-  if(!$('welcome').classList.contains('gone')===false) showChat(true);
-  else showChat(true);
+  showChat(true);
+
+  if(!chatId){
+    chatId = Date.now().toString();
+    const d = store();
+    d.chats.push({id:chatId, title:'Naming...', msgs:[], ts:new Date().toISOString()});
+    save(d);
+    renderHistory();
+    genTitle(val).then(t => {
+      const d2 = store();
+      const i = d2.chats.findIndex(c => c.id === chatId);
+      if(i !== -1) {
+        d2.chats[i].title = t;
+        save(d2);
+        const titleEl = document.querySelector(`.sb-item[data-id="${chatId}"] .sb-title`);
+        if(titleEl) {
+          let j = 0;
+          const itv = setInterval(() => {
+            j++; titleEl.textContent = t.substring(0, j);
+            if(j >= t.length) { clearInterval(itv); setTimeout(renderHistory, 500); }
+          }, 40);
+        } else { renderHistory(); }
+      }
+    });
+  }
+
+  chatMsgs.push({role:'user',text:val,img:imgDataUrl||null});
+  await saveChat();
 
   renderMsg(val,'user',true,imgDataUrl);
   $('inp').value=''; $('inp').style.height='auto'; updateSendBtn();
@@ -1443,7 +1469,7 @@ async function doSend(){
 async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
   if(!typingEl){ typingEl=showTyping(); }
   const sys=buildSysPrompt();
-  let history=chatMsgs.map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
+  let history=(isRegen ? chatMsgs : chatMsgs.slice(0, -1)).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
 
   let webContext = "";
   if(webSearch){
