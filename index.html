@@ -908,11 +908,29 @@ const MODELS = {
 
 /* ══════════ TOAST ══════════ */
 function toast(msg, dur=3000) {
-  document.querySelectorAll('.toast').forEach(t=>t.remove());
-  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  // Clean up existing toasts
+  document.querySelectorAll('.toast').forEach(t => {
+    t.classList.remove('on');
+    t.remove();
+  });
+  
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  t.style.pointerEvents = 'none';
+  
   document.body.appendChild(t);
-  requestAnimationFrame(()=>{ requestAnimationFrame(()=>t.classList.add('on')); });
-  setTimeout(()=>{ t.classList.remove('on'); setTimeout(()=>t.remove(),300); }, dur);
+  
+  // Trigger animation
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => t.classList.add('on'));
+  });
+  
+  // Remove after duration
+  setTimeout(() => {
+    t.classList.remove('on');
+    setTimeout(() => t.remove(), 300);
+  }, dur);
 }
 
 /* ══════════ DEV LOG ══════════ */
@@ -1230,15 +1248,41 @@ $('pmExportAll').onclick=()=>{
 };
 
 /* ══════════ ATTACH ══════════ */
-$('attachBtn').onclick=()=>$('fileInput').click();
-$('fileInput').onchange=async(e)=>{
-  const files=[...e.target.files]; if(!files.length)return;
-  for(const f of files){ const dataUrl=await toDataUrl(f); attachments.push({file:f,dataUrl}); }
-  renderAttachPreview(); $('fileInput').value='';
+$('attachBtn').onclick = () => $('fileInput').click();
+
+$('fileInput').onchange = async (e) => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  
+  try {
+    for (const f of files) {
+      if (f.size > 25 * 1024 * 1024) {
+        toast('File too large (max 25MB)');
+        continue;
+      }
+      const dataUrl = await toDataUrl(f);
+      attachments.push({ file: f, dataUrl });
+    }
+    renderAttachPreview();
+    updateSendBtn();
+  } catch (e) {
+    toast('File upload error: ' + e.message);
+  } finally {
+    $('fileInput').value = '';
+  }
 };
-function toDataUrl(f){ return new Promise(r=>{ const fr=new FileReader(); fr.onload=e=>r(e.target.result); fr.readAsDataURL(f); }); }
-function renderAttachPreview(){
-  const p=$('attachPreview');
+
+function toDataUrl(f) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = e => resolve(e.target.result);
+    fr.onerror = () => reject(new Error('Failed to read file'));
+    fr.readAsDataURL(f);
+  });
+}
+
+function renderAttachPreview() {
+  const p = $('attachPreview');
   p.innerHTML='';
   if(!attachments.length){ p.classList.remove('has'); return; }
   p.classList.add('has');
@@ -1253,18 +1297,62 @@ function renderAttachPreview(){
 }
 
 /* ══════════ VOICE ══════════ */
-$('voiceBtn').onclick=()=>{
-  if(!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)){
-    toast('Voice not supported in this browser'); return;
+$('voiceBtn').onclick = () => {
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    toast('Voice recognition not supported');
+    return;
   }
-  if(isRecording){ if(mediaRecorder) mediaRecorder.stop(); return; }
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  const r=new SR(); r.lang='en-US'; r.interimResults=true; r.continuous=false;
-  isRecording=true; $('voiceBtn').classList.add('recording'); mediaRecorder=r;
-  r.onresult=e=>{ const t=Array.from(e.results).map(x=>x[0].transcript).join(''); $('inp').value=t; autoResize($('inp')); updateSendBtn(); };
-  r.onend=()=>{ isRecording=false; $('voiceBtn').classList.remove('recording'); mediaRecorder=null; };
-  r.onerror=()=>{ isRecording=false; $('voiceBtn').classList.remove('recording'); mediaRecorder=null; };
-  r.start(); devLog('Voice input started');
+  
+  if (isRecording) {
+    if (mediaRecorder) mediaRecorder.stop();
+    return;
+  }
+  
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  
+  isRecording = true;
+  $('voiceBtn').classList.add('recording');
+  mediaRecorder = recognition;
+  
+  recognition.onstart = () => {
+    $('voiceBtn').classList.add('recording');
+  };
+  
+  recognition.onresult = (event) => {
+    const transcript = Array.from(event.results)
+      .map(x => x[0].transcript)
+      .join('');
+    $('inp').value = transcript;
+    autoResize($('inp'));
+    updateSendBtn();
+  };
+  
+  recognition.onend = () => {
+    isRecording = false;
+    $('voiceBtn').classList.remove('recording');
+    mediaRecorder = null;
+  };
+  
+  recognition.onerror = (event) => {
+    isRecording = false;
+    $('voiceBtn').classList.remove('recording');
+    mediaRecorder = null;
+    if (event.error !== 'no-speech') {
+      toast('Voice recognition error: ' + event.error);
+    }
+  };
+  
+  try {
+    recognition.start();
+  } catch (e) {
+    isRecording = false;
+    $('voiceBtn').classList.remove('recording');
+    mediaRecorder = null;
+  }
 };
 
 /* ══════════ AI TITLE ══════════ */
@@ -1346,21 +1434,23 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
   }
 }
 
-// Track current utterance and speaking state
+/* ══════════ SPEECH SYNTHESIS ══════════ */
 let currentUtterance = null;
 let isSpeaking = false;
-
-// Cache for voices to handle mobile async loading
 let cachedVoices = [];
+
 function initVoices() {
-  cachedVoices = window.speechSynthesis.getVoices();
-  if (typeof devLog === 'function') {
-    devLog('Voices loaded: ' + cachedVoices.length, 'ok');
-  }
+  if (!window.speechSynthesis) return;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) cachedVoices = voices;
 }
-// Load voices on startup and when they change (mobile compatibility)
-setTimeout(initVoices, 100); // Small delay to let desktop load voices
-if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = initVoices;
+
+// Desktop: voices ready immediately
+initVoices();
+// Mobile: voices load async
+if (window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = initVoices;
+}
 
 function speakText(text) {
   if (!window.speechSynthesis) {
@@ -1368,67 +1458,53 @@ function speakText(text) {
     return;
   }
 
-  // Clean text first
+  // Validate and clean text
   const cleanText = text.replace(/[*_`#]/g, '').trim();
-  if (!cleanText) {
-    return;
-  }
+  if (!cleanText || cleanText.length === 0) return;
 
-  // Only cancel if already speaking
-  if (isSpeaking) {
-    window.speechSynthesis.cancel();
-    isSpeaking = false;
-  }
+  // Stop any ongoing speech
+  try { window.speechSynthesis.cancel(); } catch (e) { /* silent */ }
+  isSpeaking = false;
 
-  // Show stop button
+  // Show stop button immediately
   const stopBtn = document.getElementById('stopVoiceBtn');
-  if (stopBtn) {
-    stopBtn.style.display = 'flex';
-  }
+  if (stopBtn) stopBtn.style.display = 'flex';
 
-  // Create new utterance
-  const u = new SpeechSynthesisUtterance(cleanText);
-  u.lang = 'en-US';
-  u.rate = 1.0;
-  
-  // Get voices - try cache first, then fresh fetch
-  let voices = cachedVoices.length > 0 ? cachedVoices : window.speechSynthesis.getVoices();
-  
+  // Create utterance
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  utterance.lang = 'en-US';
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+
+  // Select best available voice
+  const voices = window.speechSynthesis.getVoices();
   if (voices.length > 0) {
-    // Prefer en-US, fallback to any English
-    let voice = voices.find(v => v.lang === 'en-US') || 
-                voices.find(v => v.lang.startsWith('en')) || 
-                voices[0];
-    
-    if (voice) {
-      u.voice = voice;
-    }
+    const selectedVoice = voices.find(v => v.lang === 'en-US') 
+                       || voices.find(v => v.lang.startsWith('en')) 
+                       || voices[0];
+    if (selectedVoice) utterance.voice = selectedVoice;
   }
 
-  // Setup handlers
-  u.onstart = () => {
-    isSpeaking = true;
+  // Event handlers
+  utterance.onstart = () => { isSpeaking = true; };
+  utterance.onend = () => { 
+    isSpeaking = false; 
+    if (stopBtn) stopBtn.style.display = 'none'; 
   };
-
-  u.onend = () => {
-    isSpeaking = false;
+  utterance.onerror = () => { 
+    isSpeaking = false; 
     if (stopBtn) stopBtn.style.display = 'none';
   };
 
-  u.onerror = () => {
-    isSpeaking = false;
-    if (stopBtn) stopBtn.style.display = 'none';
-  };
+  currentUtterance = utterance;
 
-  currentUtterance = u;
-
-  // Speak
+  // Queue speech
   try {
-    window.speechSynthesis.speak(u);
+    window.speechSynthesis.speak(utterance);
   } catch (e) {
-    toast('Speech error: ' + e.message);
-    if (stopBtn) stopBtn.style.display = 'none';
     isSpeaking = false;
+    if (stopBtn) stopBtn.style.display = 'none';
   }
 }
 
@@ -1455,11 +1531,11 @@ function typeText(el, text, cb){
 }
 
 /* ══════════ VOICE STOP ══════════ */
-$('stopVoiceBtn').onclick=()=>{ 
-  devLog('Stop button clicked', 'ok');
-  window.speechSynthesis.cancel(); 
+$('stopVoiceBtn').onclick = () => {
+  try { window.speechSynthesis.cancel(); } catch (e) { /* silent */ }
   isSpeaking = false;
-  $('stopVoiceBtn').style.display='none'; 
+  const stopBtn = $('stopVoiceBtn');
+  if (stopBtn) stopBtn.style.display = 'none';
 };
 
 /* ══════════ TYPING INDICATOR ══════════ */
@@ -1497,51 +1573,78 @@ function applyCode(container){
     };
     const runBtn=hdr.querySelector('.cb-run');
     if(runBtn) runBtn.onclick=()=>{
-      let content=raw;
-      if(lang==='javascript'||lang==='js'){
-        content=`<!DOCTYPE html><html><body style="background:#111;color:#eee;font-family:monospace;padding:20px"><script>${raw}<\/script></body></html>`;
+      try {
+        let content = raw;
+        if(lang==='javascript'||lang==='js'){
+          content=`<!DOCTYPE html><html><body style="background:#111;color:#eee;font-family:monospace;padding:20px"><script>${raw}<\/script></body></html>`;
+        }
+        const blob = new Blob([content], {type: 'text/html'});
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        // Clean up after 5 seconds
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } catch (e) {
+        toast('Failed to run code');
       }
-      const blob = new Blob([content], {type: 'text/html'});
-      window.open(URL.createObjectURL(blob), '_blank');
     };
   });
 }
 
 /* ══════════ SEND — FIX: reliable click + touch ══════════ */
 async function doSend(){
-  if(busy)return;
-  const val=$('inp').value.trim();
-  if(!val&&!attachments.length)return;
-  devLog('Sending: '+val.substring(0,60)+(val.length>60?'…':''));
-
-  const imgDataUrl=attachments.length?attachments[0].dataUrl:null;
-  busy=true; setBusy(true);
-  attachments=[]; renderAttachPreview();
+  if (busy) return;
+  
+  const val = $('inp').value.trim();
+  if (!val && !attachments.length) return;
+  
+  const imgDataUrl = attachments.length ? attachments[0].dataUrl : null;
+  busy = true;
+  setBusy(true);
+  attachments = [];
+  renderAttachPreview();
 
   showChat(true);
-  if(!chatId){
+  
+  $('inp').value = '';
+  $('inp').style.height = 'auto';
+  updateSendBtn();
+
+  chatMsgs.push({ role: 'user', text: val, img: imgDataUrl });
+  renderMsg(val, 'user', false, imgDataUrl);
+  scrollBot(true);
+
+  if (!chatId) {
     chatId = Date.now().toString();
     const d = store();
-    d.chats.push({id:chatId, title:'Naming...', msgs:[], ts:new Date().toISOString()});
+    d.chats.push({ id: chatId, title: 'Naming...', msgs: [], ts: new Date().toISOString() });
     save(d);
     renderHistory();
     genTitle(val).then(t => {
       const d2 = store();
       const i = d2.chats.findIndex(c => c.id === chatId);
-      if(i !== -1) {
+      if (i !== -1) {
         d2.chats[i].title = t;
         save(d2);
         const titleEl = document.querySelector(`.sb-item[data-id="${chatId}"] .sb-title`);
-        if(titleEl) {
+        if (titleEl) {
           let j = 0;
           const itv = setInterval(() => {
-            j++; titleEl.textContent = t.substring(0, j);
-            if(j >= t.length) { clearInterval(itv); setTimeout(renderHistory, 500); }
+            j++;
+            titleEl.textContent = t.substring(0, j);
+            if (j >= t.length) {
+              clearInterval(itv);
+              setTimeout(renderHistory, 500);
+            }
           }, 40);
-        } else { renderHistory(); }
+        } else {
+          renderHistory();
+        }
       }
     });
   }
+
+  callAI(val, imgDataUrl);
+}
 
   chatMsgs.push({role:'user',text:val,img:imgDataUrl||null});
   await saveChat();
