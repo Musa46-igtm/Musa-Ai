@@ -783,13 +783,13 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
             <span class="model-dot gpt"></span>
             <div><div class="model-opt-name">GPT-4o</div><div class="model-opt-sub">Smarter · Complex tasks</div></div>
           </div>
-          <div class="model-opt" data-model="claude-3-5-sonnet" data-dot="claude">
+          <div class="model-opt" data-model="claude-3-haiku" data-dot="claude">
             <span class="model-dot claude"></span>
-            <div><div class="model-opt-name">Claude 3.5 Sonnet</div><div class="model-opt-sub">Balanced · Creative</div></div>
+            <div><div class="model-opt-name">Claude 3 Haiku</div><div class="model-opt-sub">Fast · Reliable</div></div>
           </div>
-          <div class="model-opt" data-model="deepseek-v3" data-dot="gemini">
+          <div class="model-opt" data-model="meta-llama-3-70b-instruct" data-dot="gemini">
             <span class="model-dot gemini"></span>
-            <div><div class="model-opt-name">DeepSeek V3</div><div class="model-opt-sub">Powerful · Efficient</div></div>
+            <div><div class="model-opt-name">Llama 3 70B</div><div class="model-opt-sub">Powerful · Logic</div></div>
           </div>
         </div>
       </div>
@@ -910,8 +910,8 @@ const $ = id => document.getElementById(id);
 const MODELS = {
   'gpt-4o-mini':       { label:'GPT-4o Mini',        dot:'musa' },
   'gpt-4o':            { label:'GPT-4o',              dot:'gpt' },
-  'claude-3-5-sonnet': { label:'Claude 3.5 Sonnet',   dot:'claude' },
-  'deepseek-v3':       { label:'DeepSeek V3',         dot:'gemini' },
+  'claude-3-haiku':    { label:'Claude 3 Haiku',     dot:'claude' },
+  'meta-llama-3-70b-instruct': { label:'Llama 3 70B', dot:'gemini' },
 };
 
 /* ══════════ TOAST ══════════ */
@@ -1481,11 +1481,6 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
     }
   }
 
-  // If code is expected/being written, prepare UI
-  if(userMsg.toLowerCase().includes('code') || userMsg.toLowerCase().includes('write a')) {
-    // Pre-emptively show shell container if user asks for code
-  }
-
   let userPayload;
   if(imgDataUrl){
     const b64=imgDataUrl.split(',')[1];
@@ -1505,14 +1500,21 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null){
       const row=document.createElement('div'); row.className='msg ai';
       const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       const modelTag=`<span class="msg-model-tag">${MODELS[selectedModel]?.label||'AI'}</span>`;
-      row.innerHTML=`<div class="msg-inner"><div class="ai-av"><svg viewBox="0 0 44 44"><path d="M22 2L38.17 11.5L38.17 30.5L22 40L5.83 30.5L5.83 11.5Z"/><path d="M14 29L14 17L22 25.5L30 17L30 29" stroke="var(--bg-0)" stroke-width="3" fill="none"/></svg></div><div class="msg-body"><div class="msg-meta"><span class="msg-name">Musa AI</span>${modelTag}<span class="msg-time">${now}</span></div><div class="msg-prose target"></div><div class="msg-actions"><button class="msg-act act-copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button><button class="msg-act act-speak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Speak</button></div></div></div>`;
+      row.innerHTML=`<div class="msg-inner"><div class="ai-av"><svg viewBox="0 0 44 44"><path d="M22 2L38.17 11.5L38.17 30.5L22 40L5.83 30.5L5.83 11.5Z"/><path d="M14 29L14 17L22 25.5L30 17L30 29" stroke="var(--bg-0)" stroke-width="3" fill="none"/></svg></div><div class="msg-body"><div class="msg-meta"><span class="msg-name">Musa AI</span>${modelTag}<span class="msg-time">${now}</span></div><div class="msg-prose target"></div><div class="msg-actions"><button class="msg-act act-copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button><button class="msg-act act-regen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Retry</button><button class="msg-act act-speak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Speak</button></div></div></div>`;
       $('chat').appendChild(row);
       const target=row.querySelector('.target');
 
+      let lastRender = 0;
       for await(const chunk of res){
         const delta=chunk?.choices?.[0]?.delta?.content||chunk?.text||'';
         aiText+=delta;
-        target.innerHTML=marked.parse(aiText)+'<span class="cursor"></span>';
+        const now = Date.now();
+        if(now - lastRender > 64) { // Throttled rendering to prevent lag
+          target.innerHTML=marked.parse(aiText)+'<span class="cursor"></span>';
+          lastRender = now;
+          // Auto-open shell if code block is detected
+          if(aiText.includes('```')) $('shellContainer').classList.add('on');
+        }
       }
       target.innerHTML=marked.parse(aiText);
       applyCode(target);
