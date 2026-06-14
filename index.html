@@ -1285,7 +1285,7 @@ async function saveChat(){
   if(i!==-1){
     d.chats[i].msgs=[...chatMsgs];
     d.chats[i].ts=new Date().toISOString();
-    save(d); syncUp();
+    save(d); syncUp(); renderHistory();
   }
 }
 
