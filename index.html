@@ -1350,6 +1350,9 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
 let cachedVoices = [];
 function initVoices() {
   cachedVoices = window.speechSynthesis.getVoices();
+  if(currentMode === 'dev' || currentMode === 'root') {
+    devLog('Voices loaded: ' + cachedVoices.length, 'ok');
+  }
 }
 // Load voices on startup and when they change (mobile compatibility)
 initVoices();
@@ -1357,45 +1360,72 @@ if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = initVoices;
 
 function speakText(text) {
   if (!window.speechSynthesis) {
-    toast("Speech not supported");
+    toast("Speech not supported on this browser");
     return;
   }
 
+  // Always stop current speech first
   window.speechSynthesis.cancel();
-
-  // Show stop button immediately for instant mobile feedback
-  const stopBtn = window.document.getElementById('stopVoiceBtn');
+  
+  // Immediately show stop button
+  const stopBtn = document.getElementById('stopVoiceBtn');
   if (stopBtn) stopBtn.style.display = 'flex';
 
-  // Immediate invocation to minimize latency
+  // Clean and validate text
   const cleanText = text.replace(/[*_`#]/g, '').trim();
   if (!cleanText) {
     if (stopBtn) stopBtn.style.display = 'none';
     return;
   }
 
+  // Create utterance
   const u = new SpeechSynthesisUtterance(cleanText);
-  u.lang = 'en-US'; // Explicitly set lang for mobile compatibility
-
-  // Use cached voices, with fallback to live fetch for mobile
-  let voices = cachedVoices.length > 0 ? cachedVoices : window.speechSynthesis.getVoices();
+  u.lang = 'en-US';
+  u.pitch = 1.15;
+  u.rate = 1.0;
   
-  // Selection logic for a "sweeter" voice (prioritizing high-quality female voices)
+  // Get voices with retry logic for mobile
+  let voices = cachedVoices;
+  if (voices.length === 0) {
+    voices = window.speechSynthesis.getVoices();
+  }
+  
+  // Select voice with fallback chain
   const preferred = ["Google UK English Female", "Samantha", "Victoria", "Microsoft Zira", "Google US English"];
-  const voice = voices.find(v => preferred.some(p => v.name.includes(p)))
-             || voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural')))
-             || voices.find(v => v.lang.startsWith('en'));
-  if (voice) u.voice = voice;
-  u.pitch = 1.15; // Slightly higher pitch for a "sweeter", friendlier tone
-  u.rate = 1.0;   // Keep speed natural
-  u.onend = () => { if (stopBtn) stopBtn.style.display = 'none'; };
-  u.onerror = () => { if (stopBtn) stopBtn.style.display = 'none'; };
+  let selectedVoice = voices.find(v => preferred.some(p => v.name.includes(p)));
+  if (!selectedVoice) {
+    selectedVoice = voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural')));
+  }
+  if (!selectedVoice) {
+    selectedVoice = voices.find(v => v.lang.startsWith('en'));
+  }
+  
+  if (selectedVoice) {
+    u.voice = selectedVoice;
+  }
 
-  // Small delay and resume() to fix common mobile/Chrome "stuck" bugs
-  setTimeout(() => {
+  // Setup event handlers
+  const hideStopBtn = () => {
+    if (stopBtn) stopBtn.style.display = 'none';
+  };
+  
+  u.onend = hideStopBtn;
+  u.onerror = (event) => {
+    devLog('Speech error: ' + event.error, 'err');
+    hideStopBtn();
+    toast('Speech failed: ' + event.error);
+  };
+
+  // Queue speech with explicit timing
+  try {
     window.speechSynthesis.resume();
-    window.speechSynthesis.speak(u);
-  }, 50);
+    const result = window.speechSynthesis.speak(u);
+    devLog('Speech queued: ' + cleanText.substring(0, 50), 'ok');
+  } catch (e) {
+    devLog('Speech exception: ' + e.message, 'err');
+    hideStopBtn();
+    toast('Speech error: ' + e.message);
+  }
 }
 
 /* ══════════ SCROLL ══════════ */
