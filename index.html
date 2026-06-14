@@ -1348,20 +1348,22 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
 
 function speakText(text) {
   speechSynthesis.cancel();
+
+  // Show stop button immediately for instant mobile feedback
+  if ($('stopVoiceBtn')) $('stopVoiceBtn').style.display = 'flex';
+
   // Immediate invocation to minimize latency
   const u = new SpeechSynthesisUtterance(text.replace(/[*_`#]/g, ''));
-  const voices = speechSynthesis.getVoices();
+  u.lang = 'en-US'; // Explicitly set lang for mobile compatibility
 
+  const voices = speechSynthesis.getVoices();
   // Selection logic for a "sweeter" voice (prioritizing high-quality female voices)
   const preferred = ["Google UK English Female", "Microsoft Zira", "Samantha", "Victoria", "Google US English"];
   const voice = voices.find(v => preferred.some(p => v.name.includes(p)))
              || voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural')));
-
   if (voice) u.voice = voice;
   u.pitch = 1.15; // Slightly higher pitch for a "sweeter", friendlier tone
   u.rate = 1.0;   // Keep speed natural
-
-  u.onstart = () => { $('stopVoiceBtn').style.display = 'flex'; };
   u.onend = () => { $('stopVoiceBtn').style.display = 'none'; };
   u.onerror = () => { $('stopVoiceBtn').style.display = 'none'; };
   speechSynthesis.speak(u);
