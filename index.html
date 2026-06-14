@@ -1346,11 +1346,15 @@ function renderMsg(text, role, animate=true, imgDataUrl=null){
   }
 }
 
+// Track current utterance and speaking state
+let currentUtterance = null;
+let isSpeaking = false;
+
 // Cache for voices to handle mobile async loading
 let cachedVoices = [];
 function initVoices() {
   cachedVoices = window.speechSynthesis.getVoices();
-  if(currentMode === 'dev' || currentMode === 'root') {
+  if (typeof devLog === 'function') {
     devLog('Voices loaded: ' + cachedVoices.length, 'ok');
   }
 }
@@ -1359,72 +1363,91 @@ initVoices();
 if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = initVoices;
 
 function speakText(text) {
+  devLog('speakText called with: ' + text.substring(0, 40), 'ok');
+  
   if (!window.speechSynthesis) {
+    devLog('speechSynthesis not available', 'err');
     toast("Speech not supported on this browser");
     return;
   }
 
-  // Always stop current speech first
-  window.speechSynthesis.cancel();
-  
-  // Immediately show stop button
-  const stopBtn = document.getElementById('stopVoiceBtn');
-  if (stopBtn) stopBtn.style.display = 'flex';
-
-  // Clean and validate text
+  // Clean text first
   const cleanText = text.replace(/[*_`#]/g, '').trim();
   if (!cleanText) {
-    if (stopBtn) stopBtn.style.display = 'none';
+    devLog('Cleaned text is empty', 'err');
     return;
   }
 
-  // Create utterance
+  devLog('Creating utterance for: ' + cleanText.substring(0, 40), 'ok');
+
+  // Only cancel if already speaking
+  if (isSpeaking) {
+    window.speechSynthesis.cancel();
+    isSpeaking = false;
+  }
+
+  // Show stop button
+  const stopBtn = document.getElementById('stopVoiceBtn');
+  if (stopBtn) {
+    stopBtn.style.display = 'flex';
+    devLog('Stop button shown', 'ok');
+  }
+
+  // Create new utterance
   const u = new SpeechSynthesisUtterance(cleanText);
   u.lang = 'en-US';
-  u.pitch = 1.15;
   u.rate = 1.0;
   
-  // Get voices with retry logic for mobile
-  let voices = cachedVoices;
-  if (voices.length === 0) {
-    voices = window.speechSynthesis.getVoices();
-  }
+  // Get voices
+  let voices = window.speechSynthesis.getVoices();
+  devLog('Available voices: ' + voices.length, 'ok');
   
-  // Select voice with fallback chain
-  const preferred = ["Google UK English Female", "Samantha", "Victoria", "Microsoft Zira", "Google US English"];
-  let selectedVoice = voices.find(v => preferred.some(p => v.name.includes(p)));
-  if (!selectedVoice) {
-    selectedVoice = voices.find(v => v.lang.startsWith('en') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('natural')));
-  }
-  if (!selectedVoice) {
-    selectedVoice = voices.find(v => v.lang.startsWith('en'));
-  }
-  
-  if (selectedVoice) {
-    u.voice = selectedVoice;
+  if (voices.length > 0) {
+    // Try to find a good voice, but don't overthink it
+    let voice = voices.find(v => v.lang === 'en-US');
+    if (!voice) voice = voices.find(v => v.lang.startsWith('en'));
+    if (!voice) voice = voices[0];
+    
+    if (voice) {
+      u.voice = voice;
+      devLog('Voice selected: ' + voice.name, 'ok');
+    }
+  } else {
+    devLog('No voices available', 'err');
   }
 
-  // Setup event handlers
-  const hideStopBtn = () => {
+  // Setup handlers - no .onerror to avoid interference
+  u.onstart = () => {
+    devLog('Speech started', 'ok');
+    isSpeaking = true;
+  };
+
+  u.onend = () => {
+    devLog('Speech ended', 'ok');
+    isSpeaking = false;
     if (stopBtn) stopBtn.style.display = 'none';
   };
-  
-  u.onend = hideStopBtn;
-  u.onerror = (event) => {
-    devLog('Speech error: ' + event.error, 'err');
-    hideStopBtn();
-    toast('Speech failed: ' + event.error);
+
+  u.onpause = () => {
+    devLog('Speech paused', 'ok');
   };
 
-  // Queue speech with explicit timing
+  u.onresume = () => {
+    devLog('Speech resumed', 'ok');
+  };
+
+  currentUtterance = u;
+
+  // Speak directly without delays
   try {
-    window.speechSynthesis.resume();
-    const result = window.speechSynthesis.speak(u);
-    devLog('Speech queued: ' + cleanText.substring(0, 50), 'ok');
+    devLog('Calling speechSynthesis.speak()', 'ok');
+    window.speechSynthesis.speak(u);
+    devLog('Speech command sent', 'ok');
   } catch (e) {
     devLog('Speech exception: ' + e.message, 'err');
-    hideStopBtn();
     toast('Speech error: ' + e.message);
+    if (stopBtn) stopBtn.style.display = 'none';
+    isSpeaking = false;
   }
 }
 
@@ -1451,7 +1474,12 @@ function typeText(el, text, cb){
 }
 
 /* ══════════ VOICE STOP ══════════ */
-$('stopVoiceBtn').onclick=()=>{ window.speechSynthesis.cancel(); $('stopVoiceBtn').style.display='none'; };
+$('stopVoiceBtn').onclick=()=>{ 
+  devLog('Stop button clicked', 'ok');
+  window.speechSynthesis.cancel(); 
+  isSpeaking = false;
+  $('stopVoiceBtn').style.display='none'; 
+};
 
 /* ══════════ TYPING INDICATOR ══════════ */
 function showTyping(){
