@@ -1033,11 +1033,19 @@ function setMode(m) {
   }
   currentMode = m;
   renderGreetingChips();
-  // Update chip
+  updateModeUI(m);
+  // Update system prompt feedback
+  toast(m==='norm'?'Norm Mode — standard assistant':m==='dev'?'Dev Mode — verbose logging on':'Root Mode — full override active');
+  $('pmenu').classList.remove('on');
+  closeSb();
+}
+
+// Separate UI update logic for initialization and mode switching
+function updateModeUI(m) {
   const chip=$('modeChip');
   chip.className='mode-chip '+m;
   chip.textContent=m.toUpperCase();
-  // Banner
+
   $('rootBanner').classList.toggle('on', m==='root');
   // Back to norm button
   $('backToNormBtn').style.display = m === 'norm' ? 'none' : 'flex';
@@ -1048,13 +1056,12 @@ function setMode(m) {
     devLog('Entered '+m.toUpperCase()+' mode', 'ok');
   }
   // Update pm-item active states
-  ['pmNorm','pmDev','pmRoot'].forEach(id=>$( id).classList.remove('mode-active'));
+  ['pmNorm','pmDev','pmRoot'].forEach(id=>$(id).classList.remove('mode-active'));
   const modeMap={norm:'pmNorm',dev:'pmDev',root:'pmRoot'};
-  $(modeMap[m]).classList.add('mode-active');
-  // Update system prompt feedback
-  toast(m==='norm'?'Norm Mode — standard assistant':m==='dev'?'Dev Mode — verbose logging on':'Root Mode — full override active');
-  $('pmenu').classList.remove('on');
-  closeSb();
+  if ($(modeMap[m])) $(modeMap[m]).classList.add('mode-active');
+  
+  // Ensure greeting chips are rendered for the current mode
+  renderGreetingChips();
 }
 
 $('pmNorm').onclick=()=>setMode('norm');
@@ -1095,6 +1102,8 @@ async function authOK(id) {
   $('authScreen').classList.add('gone');
   devLog('Signed in as '+id,'ok');
   await syncDown();
+  // Initialize UI state
+  updateModeUI(currentMode);
   renderHistory();
   setGreeting();
 
@@ -1549,11 +1558,13 @@ function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null){
 async function extractConceptsAI(text) {
   try {
     const res = await puter.ai.chat([
-      {role:'system', content: 'Extract 5-7 key conceptual terms from the following text. Return ONLY a JSON array of strings. No preamble.'},
+      {role:'system', content: 'Extract the 5-7 most important core concepts from the provided text. Return ONLY a valid JSON array of strings (e.g. ["Concept 1", "Concept 2"]). Do not include any other text or explanation.'},
       {role:'user', content: text.substring(0, 1000)}
     ], {model: 'gpt-4o-mini'});
     let raw = typeof res === 'string' ? res : (res?.message?.content || res?.text || "[]");
-    raw = raw.replace(/```json|```/g, '').trim();
+    // More robust JSON extraction
+    const match = raw.match(/\[.*\]/s);
+    raw = match ? match[0] : raw.replace(/```json|```/g, '').trim();
     return JSON.parse(raw);
   } catch (e) {
     // Fallback to regex if AI fails
@@ -2187,7 +2198,7 @@ $('sbTimeCapsuleBtn').onclick = () => {
     <div style="margin-bottom:16px;">
       <label style="font-size:11px;color:var(--text-2);font-weight:600;text-transform:uppercase;display:block;margin-bottom:6px;">Delivery Delay</label>
       <select id="tcDelay" style="width:100%;background:var(--bg-3);border:1px solid var(--border-md);color:var(--text-0);padding:8px;border-radius:var(--r-sm);outline:none;">
-        <option value="60000">1 minute (test)</option>
+        <option value="5000">5 seconds (test)</option>
         <option value="3600000">1 hour</option>
         <option value="86400000">1 day</option>
         <option value="604800000">1 week</option>
