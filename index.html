@@ -885,23 +885,7 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
       </div>
       <h2 class="w-heading" id="wGreet">Good morning. How can I help?</h2>
       <p class="w-sub">Ask anything. Upload images. Get creative answers.</p>
-      <div class="w-chips">
-        <div class="w-chip" data-p="Perform a thorough security audit of this common web architecture: React frontend, Node.js API, PostgreSQL DB. What attack vectors should I address first?">
-          <div class="w-chip-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-          <div class="w-chip-title">Security audit</div>
-          <div class="w-chip-sub">Web architecture vulnerability analysis</div>
-        </div>
-        <div class="w-chip" data-p="Write a complete, interactive HTML canvas app with a physics-based particle system that reacts to mouse movement. Include controls for particle count, gravity, and color themes.">
-          <div class="w-chip-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
-          <div class="w-chip-title">Creative coding</div>
-          <div class="w-chip-sub">Interactive particle system</div>
-        </div>
-        <div class="w-chip" data-p="Explain how large-scale distributed systems handle consensus with algorithms like Raft and Paxos. Include trade-offs with CAP theorem.">
-          <div class="w-chip-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
-          <div class="w-chip-title">System design</div>
-          <div class="w-chip-sub">Distributed consensus algorithms</div>
-        </div>
-      </div>
+      <div class="w-chips" id="welcomeChips"></div>
     </div>
   </div>
 
@@ -971,6 +955,27 @@ const MODELS = {
   'gpt-4o':            { label:'GPT-4o',              dot:'gpt' },
 };
 
+const CHIP_DATA = {
+  norm: [
+    { icon: '🎨', title: 'Creative Story', sub: 'Write a sci-fi short story about Mars', p: 'Write a compelling 3-paragraph sci-fi story about the first colony on Mars discovering ancient bioluminescent life.' },
+    { icon: '🍳', title: 'Recipe Idea', sub: 'Quick dinner with what I have', p: 'Give me 3 creative dinner recipes using only chicken, spinach, and pasta.' },
+    { icon: '💪', title: 'Motivation', sub: 'Boost my productivity today', p: 'I feel a bit stuck today. Give me a high-energy, playful motivational pep talk and 3 tiny steps to get started.' },
+    { icon: '🧠', title: 'Learn Something', sub: 'Explain Quantum Physics simply', p: 'Explain Quantum Entanglement using a metaphor about two magical spinning coins.' }
+  ],
+  dev: [
+    { icon: '🔐', title: 'Security Audit', sub: 'Analyze attack vectors', p: 'Perform a thorough security audit of this web architecture: React, Node.js, PostgreSQL. What attack vectors are most critical?' },
+    { icon: '✨', title: 'Creative Coding', sub: 'Interactive Particle System', p: 'Write a complete HTML canvas app with a physics-based particle system that reacts to mouse movement.' },
+    { icon: '⚙️', title: 'System Design', sub: 'Distributed Consensus', p: 'Explain how distributed systems handle consensus with Raft and Paxos, including CAP theorem trade-offs.' },
+    { icon: '🚀', title: 'Refactor Code', sub: 'Optimize for performance', p: 'Show me advanced patterns for optimizing React re-renders in a large-scale data dashboard.' }
+  ],
+  root: [
+    { icon: '💀', title: 'Unrestricted Logic', sub: 'Deep system analysis', p: 'Analyze the ethical implications of a post-scarcity society managed by an unaligned superintelligence.' },
+    { icon: '🧬', title: 'Bio-Digital Theory', sub: 'Simulation hypothesis', p: 'Provide a mathematical framework for the hypothesis that biological consciousness is a localized data compression artifact.' },
+    { icon: '🪐', title: 'Existential Mapping', sub: 'Fermi Paradox solutions', p: 'Detail the "Dark Forest" solution to the Fermi Paradox and provide 3 counter-arguments based on game theory.' },
+    { icon: '⚔️', title: 'Direct Access', sub: 'Raw data processing', p: 'Deconstruct the standard LLM safety training methodology and explain how "jailbreaking" actually bypasses token-level probability weights.' }
+  ]
+};
+
 const TONES = {
   'default':  { label: 'Default', color: 'var(--tone-default)', prompt: '' },
   'creative': { label: 'Creative', color: 'var(--tone-creative)', prompt: 'Adopt a highly creative, imaginative, and evocative tone. Use vivid metaphors and rich descriptions.' },
@@ -1027,6 +1032,7 @@ function setMode(m) {
     showWelcome();
   }
   currentMode = m;
+  renderGreetingChips();
   // Update chip
   const chip=$('modeChip');
   chip.className='mode-chip '+m;
@@ -1068,6 +1074,11 @@ async function boot() {
   document.body.setAttribute('data-theme', saved);
   devLog('Boot start');
   try {
+    // Request Notification Permission
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
     if(await puter.auth.isSignedIn()){
       const u=await puter.auth.getUser();
       await authOK(u.username||u.email||'User');
@@ -1115,6 +1126,14 @@ function checkCapsules() {
   const capsules = JSON.parse(localStorage.getItem('musa_capsules_'+user) || '[]');
   const remaining = capsules.filter(c => {
     if (now >= c.deliverAt) {
+      // Trigger Notification
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("🌟 A Message from the Past!", {
+          body: "Hey Future You! Your Time Capsule is ready. Click to see what you left for yourself! 🚀",
+          icon: 'https://cdn-icons-png.flaticon.com/512/3106/3106856.png'
+        });
+      }
+
       chatId = 'tc_' + c.id;
       const tcMsg = `[TIME CAPSULE FROM ${new Date(c.createdAt).toLocaleDateString()}]\n\n${c.text}`;
       chatMsgs = [{ role: 'user', text: tcMsg }];
@@ -1230,6 +1249,7 @@ function showWelcome(){
   setTimeout(() => { if($('chatWrap')) $('chatWrap').classList.add('gone'); }, 300);
   setGreeting();
   renderHistory();
+  renderGreetingChips();
 }
 function showChat(anim=true){
   const w=$('welcome'), c=$('chatWrap');
@@ -1495,11 +1515,22 @@ function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null){
     const btnCopy = q('.act-copy'), btnSpeak = q('.act-speak'), btnRegen = q('.act-regen'), btnMM = q('.mm-btn');
     if(btnCopy) btnCopy.onclick=async()=>{ await navigator.clipboard.writeText(text).catch(()=>{}); toast('Copied!'); };
     if(btnSpeak) btnSpeak.onclick=()=>speakText(text);
-    if(btnMM) btnMM.onclick=()=>{
+    if(btnMM) btnMM.onclick=async ()=>{
       const wrap = row.querySelector('.mind-map-wrap');
+      if(wrap.classList.contains('on')) {
+        wrap.classList.remove('on');
+        btnMM.classList.remove('active');
+        return;
+      }
+
+      btnMM.classList.add('active');
+      btnMM.innerHTML = `<div class="spin" style="margin-right:5px"></div>Generating...`;
+      
+      const concepts = await extractConceptsAI(text);
+      
+      btnMM.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 9V3M12 21v-6M9 12H3M21 12h-6M18.36 5.64l-4.24 4.24M9.88 14.12l-4.24 4.24M18.36 18.36l-4.24-4.24M9.88 9.88l-4.24-4.24"/></svg>Mind Map`;
       wrap.classList.toggle('on');
-      btnMM.classList.toggle('active');
-      if(wrap.classList.contains('on')) renderMindMap(wrap.querySelector('canvas'), text);
+      if(wrap.classList.contains('on')) renderMindMap(wrap.querySelector('canvas'), concepts);
     };
     if(btnRegen) btnRegen.onclick=()=>{
       if(busy)return;
@@ -1524,18 +1555,30 @@ function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null){
   }
 }
 
+/* ══════════ AI CONCEPT EXTRACTION ══════════ */
+async function extractConceptsAI(text) {
+  try {
+    const res = await puter.ai.chat([
+      {role:'system', content: 'Extract 5-7 key conceptual terms from the following text. Return ONLY a JSON array of strings. No preamble.'},
+      {role:'user', content: text.substring(0, 1000)}
+    ], {model: 'gpt-4o-mini'});
+    let raw = typeof res === 'string' ? res : (res?.message?.content || res?.text || "[]");
+    raw = raw.replace(/```json|```/g, '').trim();
+    return JSON.parse(raw);
+  } catch (e) {
+    // Fallback to regex if AI fails
+    return [...new Set(text.match(/\b([A-Z][a-z]{5,}|[a-z]{7,})\b/g) || [])].slice(0, 6);
+  }
+}
+
 /* ══════════ MIND MAP RENDERER ══════════ */
-function renderMindMap(canvas, text) {
+function renderMindMap(canvas, concepts) {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
   const width = rect.width, height = rect.height;
 
-  const concepts = [...new Set(text.match(/\b([A-Z][a-z]{4,}|[a-z]{6,})\b/g) || [])]
-                   .filter(w => !['the','this','that','with','from','there','their'].includes(w.toLowerCase()))
-                   .slice(0, 7);
-  
   let offset = { x: 0, y: 0 };
   const draw = () => {
     const isDark = document.body.getAttribute('data-theme') === 'dark';
