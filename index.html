@@ -1264,16 +1264,6 @@ function showChat(anim=true){
 }
 
 /* ══════════ CHIPS ══════════ */
-document.querySelectorAll('.w-chip').forEach(c=>{
-  c.onclick=()=>{
-    if(busy)return;
-    $('inp').value=c.dataset.p;
-    autoResize($('inp'));
-    updateSendBtn();
-    showChat(true);
-    setTimeout(()=>doSend(),280);
-  };
-});
 
 /* ══════════ NEW CHAT ══════════ */
 $('newChatBtn').onclick=()=>{
