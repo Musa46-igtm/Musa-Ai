@@ -1028,10 +1028,11 @@ function devLog(msg, type='') {
 /* ══════════ MODE SYSTEM ══════════ */
 function setMode(m) {
   if (currentMode === m) return;
-  if (chatId || chatMsgs.length > 0) {
+  // Reset local state when switching modes to prevent pollution
+  if (chatMsgs.length > 0) {
     chatId = null;
     chatMsgs = [];
-    $('chat').innerHTML = '';
+    if($('chat')) $('chat').innerHTML = '';
     showWelcome();
   }
   currentMode = m;
@@ -1083,13 +1084,16 @@ async function boot() {
   const saved = localStorage.getItem('musa_theme')||'dark';
   document.body.setAttribute('data-theme', saved);
   devLog('Boot start');
+  
+  // Instantly check for persistent session
   try {
     // Request Notification Permission
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
 
-    if(await puter.auth.isSignedIn()){
+    const isLoggedIn = await puter.auth.isSignedIn();
+    if(isLoggedIn){
       const u=await puter.auth.getUser();
       await authOK(u.username||u.email||'User');
       return;
@@ -1099,10 +1103,10 @@ async function boot() {
 }
 
 async function authOK(id) {
+  $('authScreen').classList.add('gone');
   user=id;
   $('sbAvatar').textContent = id.charAt(0).toUpperCase();
   $('sbUname').textContent = id.split('@')[0];
-  $('authScreen').classList.add('gone');
   devLog('Signed in as '+id,'ok');
   await syncDown();
   // Initialize UI state
@@ -1536,7 +1540,7 @@ function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null){
       btnMM.innerHTML = `<div class="spin" style="margin-right:5px"></div>Generating...`;
       
       // Ensure wrap is visible
-      wrap.classList.add('on');
+      requestAnimationFrame(() => wrap.classList.add('on'));
 
       const concepts = await extractConceptsAI(text);
       
@@ -1571,16 +1575,16 @@ function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null){
 async function extractConceptsAI(text) {
   try {
     const res = await puter.ai.chat([
-      {role:'system', content: 'Extract the 5-7 most important core concepts from the provided text. Return ONLY a valid JSON array of strings (e.g. ["Concept 1", "Concept 2"]). Do not include any other text or explanation.'},
+      {role:'system', content: 'You are a concept extractor. Extract 5-7 key conceptual terms from the text. Return ONLY a JSON array of strings.'},
       {role:'user', content: text.substring(0, 1000)}
-    ], {model: 'gpt-4o-mini'});
+    ], {model: 'gpt-4o-mini'}); // Explicitly using gpt-4o-mini for concepts
     let raw = typeof res === 'string' ? res : (res?.message?.content || res?.text || "[]");
     // More robust JSON extraction
     const match = raw.match(/\[.*\]/s);
     raw = match ? match[0] : raw.replace(/```json|```/g, '').trim();
     return JSON.parse(raw);
   } catch (e) {
-    // Fallback to regex if AI fails
+    devLog('Concept AI failed, using fallback', 'err');
     return [...new Set(text.match(/\b([A-Z][a-z]{5,}|[a-z]{7,})\b/g) || [])].slice(0, 6);
   }
 }
@@ -1594,6 +1598,7 @@ function renderMindMap(canvas, concepts) {
   const width = rect.width, height = rect.height;
 
   let offset = { x: 0, y: 0 };
+  const textColor = getComputedStyle(document.body).getPropertyValue('--text-0').trim() || '#ffffff';
   const draw = () => {
     const isDark = document.body.getAttribute('data-theme') === 'dark';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1640,7 +1645,7 @@ function renderMindMap(canvas, concepts) {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      ctx.fillStyle = 'var(--text-0)';
+      ctx.fillStyle = textColor; // Use computed style for text visibility
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(c, x, y);
     });
@@ -1819,6 +1824,12 @@ async function doSend(){
   const val = $('inp').value.trim();
   if (!val && !attachments.length) return;
   
+  // If we are starting from the welcome screen, ensure ID and Msgs are clean
+  if (!chatId) {
+    chatMsgs = [];
+    $('chat').innerHTML = '';
+  }
+
   const imgDataUrl = attachments.length ? attachments[0].dataUrl : null;
   let finalMsg = val;
 
