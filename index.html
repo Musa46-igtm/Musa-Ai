@@ -869,6 +869,9 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
       <button class="hdr-btn" id="themeBtn" title="Toggle theme">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
       </button>
+      <button class="hdr-btn" id="quickActionsBtn" title="Quick Actions">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>
+      </button>
     </div>
   </header>
 
@@ -1145,7 +1148,7 @@ function checkCapsules() {
 
       chatId = 'tc_' + c.id;
       const tcMsg = `[TIME CAPSULE FROM ${new Date(c.createdAt).toLocaleDateString()}]\n\n${c.text}`;
-      chatMsgs = [{ role: 'user', text: tcMsg }];
+      chatMsgs = [{ role: 'user', text: tcMsg, tone: 'default' }];
       $('chat').innerHTML = `<div class="tc-card"><div class="tc-meta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Written on ${new Date(c.createdAt).toLocaleString()}</div><div class="tc-body">${esc(c.text)}</div></div>`;
       showChat(true);
       callAI("I am reading a message I wrote to my future self. Please reflect on this message philosophically, considering how I might have grown or what this reveals about my past mindset.", null, false);
@@ -1164,6 +1167,7 @@ $('googleBtn').onclick = async()=>{
   catch(e){ toast('Google sign-in failed'); devLog('Google auth failed: '+e.message,'err'); }
 };
 
+
 let isSignUp=false;
 function bindAuthToggle() {
   const btn=$('authToggle');
@@ -1180,8 +1184,13 @@ bindAuthToggle();
 
 $('authSubmit').onclick=async()=>{
   const e=$('authEmail').value.trim(), p=$('authPwd').value.trim();
-  if(!e||!p){toast('Enter email and password');return;}
-  try{ await puter.auth.signIn(); const u=await puter.auth.getUser(); await authOK(u.username||u.email||e); }
+  if(!e||!p){ toast('Please enter credentials'); return; }
+  try{
+    await puter.auth.signIn(); 
+    const u=await puter.auth.getUser();
+    await authOK(u.username||u.email||e);
+    toast('Welcome back!');
+  }
   catch(err){ toast(err.message||'Auth failed'); devLog('Auth failed: '+err.message,'err'); }
 };
 
@@ -1231,6 +1240,7 @@ $('chaosToggleBtn').onclick=()=>{
   $('chaosToggleBtn').classList.toggle('active', chaosMode);
   toast(chaosMode ? 'Chaos Mode ON' : 'Chaos Mode OFF');
 };
+
 
 const CHAOS_PROMPTS = [
   "Rewrite the following message as a noir detective investigating a case. Keep the core intent but change the style and framing entirely.",
@@ -1525,11 +1535,14 @@ function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null){
       btnMM.classList.add('active');
       btnMM.innerHTML = `<div class="spin" style="margin-right:5px"></div>Generating...`;
       
+      // Ensure wrap is visible
+      wrap.classList.add('on');
+
       const concepts = await extractConceptsAI(text);
       
       btnMM.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 9V3M12 21v-6M9 12H3M21 12h-6M18.36 5.64l-4.24 4.24M9.88 14.12l-4.24 4.24M18.36 18.36l-4.24-4.24M9.88 9.88l-4.24-4.24"/></svg>Mind Map`;
-      wrap.classList.toggle('on');
-      if(wrap.classList.contains('on')) renderMindMap(wrap.querySelector('canvas'), concepts);
+      // Small timeout to ensure DOM has reflowed and dimensions are available
+      setTimeout(() => renderMindMap(wrap.querySelector('canvas'), concepts), 50);
     };
     if(btnRegen) btnRegen.onclick=()=>{
       if(busy)return;
