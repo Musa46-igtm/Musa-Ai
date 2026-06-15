@@ -1108,10 +1108,10 @@ async function authOK(id) {
   $('sbAvatar').textContent = id.charAt(0).toUpperCase();
   $('sbUname').textContent = id.split('@')[0];
   devLog('Signed in as '+id,'ok');
-  await syncDown();
+  renderHistory(); // Render local items immediately
+  await syncDown(); // Then pull from cloud
   // Initialize UI state
   updateModeUI(currentMode);
-  renderHistory();
   setGreeting();
 
   // Fix lingering "Naming..." placeholders from interrupted sessions
