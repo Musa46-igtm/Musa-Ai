@@ -1306,6 +1306,9 @@ let ctxTarget = null;
 let attachments = [];
 let currentMode = 'norm';
 
+/* Usage Limit Cache */
+let _limitCache = null, _limitCacheTs = 0;
+
 /* ════════════════════════════════════════
    USAGE TRACKING
    ════════════════════════════════════════ */
@@ -1315,7 +1318,7 @@ function usageKey() {
   if (!user) return null;
   const d = new Date();
   const dateStr = d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate();
-  return 'musa_usage_' + user + '_' + dateStr;
+  return 'musa_usage_v2_' + user + '_' + dateStr;
 }
 
 function getUsage() {
@@ -1346,16 +1349,35 @@ function resetTimeStr() {
   return `Resets in ${h}h ${m}m`;
 }
 
-function renderUsageMeter() {
+async function renderUsageMeter(force = false) {
   const u = getUsage();
   const callsEl = document.getElementById('usageCallsVal');
   const tokensEl = document.getElementById('usageTokensVal');
   const barEl = document.getElementById('usageBarFill');
   const resetEl = document.getElementById('usageResetTime');
   if (!callsEl) return;
+  
+  // Fetch real limits from Puter
+  let pct = Math.min(100, (u.calls / USAGE_DAILY_LIMIT) * 100);
+  if (user && window.puter) {
+    const now = Date.now();
+    try {
+      // Cache limits for 30 seconds to avoid excessive network calls
+      if (force || !_limitCache || (now - _limitCacheTs > 30000)) {
+        _limitCache = await puter.ai.getLimits();
+        _limitCacheTs = now;
+      }
+      const limits = _limitCache;
+      const modelLimit = limits[selectedModel];
+      if (modelLimit) {
+        pct = Math.min(100, (1 - (modelLimit.remaining / modelLimit.limit)) * 100);
+        if (modelLimit.remaining === 0 && selectedModel === 'gpt-5.4-nano') markGpt4oLimited();
+      }
+    } catch(e) { /* fallback to local count */ }
+  }
+
   callsEl.textContent = u.calls;
   tokensEl.textContent = u.tokens >= 1000 ? (u.tokens / 1000).toFixed(1) + 'k' : u.tokens;
-  const pct = Math.min(100, (u.calls / USAGE_DAILY_LIMIT) * 100);
   barEl.style.width = pct + '%';
   barEl.className = 'usage-bar-fill' + (pct >= 90 ? ' over' : pct >= 65 ? ' warn' : '');
   if (resetEl) resetEl.textContent = resetTimeStr();
@@ -1564,6 +1586,11 @@ async function authOK(id) {
   setGreeting();
   checkCapsules();
   renderUsageMeter();
+  
+  // Apply user-specific font size
+  const savedFS = localStorage.getItem('musa_fontsize_' + user);
+  if (savedFS) applyFontSize(parseInt(savedFS));
+
   // Repair any stuck "Naming..." titles
   const d = store();
   if (d.chats.some(c => c.title === 'Naming...')) {
@@ -1643,7 +1670,7 @@ $('modelDrop').addEventListener('click', e => {
   selectedModel = opt.dataset.model;
   $('modelLabel').textContent = MODELS[selectedModel].label;
   $('modelDot').className = 'model-dot ' + MODELS[selectedModel].dot;
-  document.querySelectorAll('.model-opt').forEach(o => o.classList.remove('selected'));
+  document.querySelectorAll('.model-opt').forEach(o => o.classList.toggle('selected', o.dataset.model === selectedModel));
   opt.classList.add('selected');
   $('modelDrop').classList.remove('on');
   devLog('Model switched to ' + MODELS[selectedModel].label);
@@ -3309,7 +3336,7 @@ async function callAI(userMsg, imgDataUrl, isRegen=false, typingEl=null) {
     if (!wasStopped) {
       /* Auto-switch to mini if GPT-4o hit its rate limit */
       if (selectedModel === 'gpt-4o' && isRateLimitError(err.message)) {
-        markGpt4oLimited();
+        markNanoLimited();
         /* Retry the exact same AI call — selectedModel is now gpt-4o-mini */
         setTimeout(() => callAI(userMsg, imgDataUrl, isRegen, null), 400);
         return;
@@ -3454,7 +3481,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('modalOv
 $('sbMemoryBtn').onclick = () => {
   closeSb();
   function buildMemoryHtml() {
-    const raw = localStorage.getItem('musa_notes_' + user) || '';
+    const raw = localStorage.getItem('musa_notes') || '';
     const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
     if (!lines.length) {
       return `<div style="text-align:center;padding:32px 16px;color:var(--text-2);">
@@ -3478,17 +3505,17 @@ $('sbMemoryBtn').onclick = () => {
     <div style="max-height:260px;overflow-y:auto;">${items}</div>
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button onclick="closeModal();" style="flex:1;background:var(--accent);color:var(--bg-0);border:none;border-radius:var(--r-md);padding:11px;font-size:14px;font-weight:600;cursor:pointer;">Done</button>
-      <button onclick="if(confirm('Clear all memories?')){localStorage.removeItem('musa_notes_' + user);toast('Memory cleared');closeModal();}" style="background:var(--bg-4);color:var(--text-1);border:none;border-radius:var(--r-md);padding:11px 16px;font-size:14px;cursor:pointer;">Clear All</button>
+      <button onclick="if(confirm('Clear all memories?')){localStorage.removeItem('musa_notes');toast('Memory cleared');closeModal();}" style="background:var(--bg-4);color:var(--text-1);border:none;border-radius:var(--r-md);padding:11px 16px;font-size:14px;cursor:pointer;">Clear All</button>
     </div>`;
   }
   openModal('Memory', buildMemoryHtml());
 };
 
 window.deleteMemoryItem = function(idx) {
-  const raw = localStorage.getItem('musa_notes_' + user) || '';
+  const raw = localStorage.getItem('musa_notes') || '';
   const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
   lines.splice(idx, 1);
-  localStorage.setItem('musa_notes_' + user, lines.join('\n'));
+  localStorage.setItem('musa_notes', lines.join('\n'));
   toast('Removed from memory');
 };
 
@@ -3497,13 +3524,13 @@ window.deleteMemoryItem = function(idx) {
    ════════════════════════════════════════ */
 $('sbSysPromptBtn').onclick = () => {
   closeSb();
-  const sp = localStorage.getItem('musa_sysprompt_' + user) || '';
+  const sp = localStorage.getItem('musa_sysprompt') || '';
   openModal('Custom System Prompt',
     `<p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">Override the default Musa AI system prompt. Leave blank to use the default.</p>
     <textarea id="spArea" style="width:100%;height:200px;background:var(--bg-3);border:1px solid var(--border-md);border-radius:var(--r-md);padding:12px;color:var(--text-0);font-size:13px;font-family:var(--mono);resize:vertical;outline:none;line-height:1.6;" placeholder="You are a helpful assistant specialised in...">${esc(sp)}</textarea>
     <div style="display:flex;gap:8px;margin-top:12px;">
-      <button onclick="const v=document.getElementById('spArea').value;localStorage.setItem('musa_sysprompt_' + user,v);toast('System prompt saved!','ok');closeModal();" style="flex:1;background:var(--accent);color:var(--bg-0);border:none;border-radius:var(--r-md);padding:11px;font-size:14px;font-weight:600;cursor:pointer;">Save</button>
-      <button onclick="localStorage.removeItem('musa_sysprompt_' + user);toast('Reset to default');closeModal();" style="background:var(--bg-4);color:var(--text-1);border:none;border-radius:var(--r-md);padding:11px 16px;font-size:14px;cursor:pointer;">Reset</button>
+      <button onclick="const v=document.getElementById('spArea').value;localStorage.setItem('musa_sysprompt',v);toast('System prompt saved!','ok');closeModal();" style="flex:1;background:var(--accent);color:var(--bg-0);border:none;border-radius:var(--r-md);padding:11px;font-size:14px;font-weight:600;cursor:pointer;">Save</button>
+      <button onclick="localStorage.removeItem('musa_sysprompt');toast('Reset to default');closeModal();" style="background:var(--bg-4);color:var(--text-1);border:none;border-radius:var(--r-md);padding:11px 16px;font-size:14px;cursor:pointer;">Reset</button>
     </div>`
   );
 };
@@ -3516,9 +3543,9 @@ function applyFontSize(sz) {
   _fontSize = Math.max(12, Math.min(20, sz));
   document.documentElement.style.setProperty('--prose-size', _fontSize + 'px');
   document.querySelectorAll('.msg-prose').forEach(el => el.style.fontSize = _fontSize + 'px');
-  if (user) localStorage.setItem('musa_fontsize_' + user, _fontSize);
+  localStorage.setItem('musa_fontsize', _fontSize);
 }
-if (!user) applyFontSize(_fontSize);
+applyFontSize(_fontSize);
 
 $('sbFontBtn').onclick = () => {
   closeSb();
