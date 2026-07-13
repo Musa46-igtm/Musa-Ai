@@ -473,7 +473,6 @@ async function cloudSyncUser(isLive) {
 }
 /* Lightweight poll: only pull the full store when the cloud version changed. */
 async function pollCloud() {
-  if (document.hidden) return; // skip work in background tabs
   const rev = await cloudRev();
   if (rev === null) return;
   if (rev !== _localRev) { _localRev = rev; await cloudSyncUser(true); }
