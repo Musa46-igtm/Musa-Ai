@@ -329,6 +329,7 @@ function setMode(m) {
      later auto-restores that mode — it is never hijacked by the active one. */
   currentMode = m;
   try { localStorage.setItem('musa_mode_' + (user || 'anon'), m); } catch {}
+  setSetting('mode', m); // push mode to cloud for cross-device sync
   updateModeUI(m);
   /* Reset to a clean conversation for the new mode. */
   chatId = null;
@@ -515,7 +516,7 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
       let local;
@@ -531,6 +532,10 @@ async function pullSettingsUsage() {
         if (winner && winner.v && winner.v !== current) {
           setSetting('theme', winner);
           document.body.setAttribute('data-theme', winner.v);
+        }
+      } else if (base === 'mode') {
+        if (remote && ['norm','dev','root'].includes(remote) && remote !== currentMode) {
+          setMode(remote);
         }
       } else if (base === 'capsules') {
         try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
