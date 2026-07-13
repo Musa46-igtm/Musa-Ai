@@ -2945,7 +2945,7 @@ function _wireCapsuleModal() {
     caps.push({ id: now, text, createdAt: now, deliverAt: now + delay });
     setCapsules(caps);
     const deliverAt = new Date(now + delay);
-    const delivLabel = deliverAt.toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    const delivLabel = deliverAt.toLocaleString([], { timeZone:'Africa/Lagos', month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
     toast('Capsule sealed! Arrives ' + delivLabel, 'ok');
     closeModal();
   };
