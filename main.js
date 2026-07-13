@@ -1271,12 +1271,13 @@ function switchToMain() {
   if (activeBranch === null) return;
   saveCurrentThreadState();
   activeBranch = null;
-  setSetting('activeBranch', null); // sync branch switch to cloud
+  setSetting('activeBranch', null); // sync to cloud
   chatMsgs = getMainMsgs();
   rebuildChatFromMsgs(chatMsgs, null);
   renderBranchBar();
   toast('↩ Switched to main thread');
   broadcastToast('↩ Switched to main thread');
+  broadcastChange(); // instant same-browser sync
 }
 
 /* Switch to an existing branch */
@@ -1286,12 +1287,13 @@ function switchToBranch(brId) {
   const br = branches.find(b => b.id === brId);
   if (!br) return;
   activeBranch = brId;
-  setSetting('activeBranch', activeBranch); // sync branch switch to cloud
+  setSetting('activeBranch', activeBranch); // sync to cloud
   chatMsgs = [...br.msgs];
   rebuildChatForBranch(br);
   renderBranchBar();
   toast(`Switched to ${br.name}`);
   broadcastToast(`Switched to ${br.name}`);
+  broadcastChange(); // instant same-browser sync
 }
 
 /* Delete a branch */
@@ -1303,6 +1305,7 @@ function deleteBranch(brId) {
   broadcastChange();
   renderBranchBar();
   toast('Branch deleted', 'ok');
+  broadcastToast('Branch deleted', 'ok');
 }
 
 /* Rebuild the chat area to show shared prefix + branch-specific messages */
@@ -1506,6 +1509,20 @@ function renderActiveChat() {
     chatId = null; chatMsgs = []; $('chat').innerHTML = '';
     showWelcome(); return;
   }
+  if (activeBranch !== null) {
+    // In branch view: reload branch data from store and rebuild
+    const br = (c.branches || []).find(b => b.id === activeBranch);
+    if (br) {
+      const saved = JSON.stringify(br.msgs);
+      const current = JSON.stringify(chatMsgs);
+      if (saved !== current) {
+        chatMsgs = [...br.msgs];
+        rebuildChatForBranch(br);
+      }
+    }
+    return;
+  }
+  // Main thread
   const msgs = c.msgs || [];
   const sameCount = msgs.length === chatMsgs.length;
   const lastSame = sameCount && msgs.length > 0 &&
