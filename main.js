@@ -293,10 +293,28 @@ function relativeTime(iso) {
 }
 
 /* ════════════════════════════════════════
-   TOAST
+   TOAST + NOTIFICATION LOG
    ════════════════════════════════════════ */
+function getNotifications() { return getSetting('notifications', []); }
+function setNotifications(v) { setSetting('notifications', v); }
+function getLastNotifSeenTs() {
+  try { return parseInt(localStorage.getItem(userKey('notifSeenTs')) || '0', 10); } catch { return 0; }
+}
+function setLastNotifSeenTs(ts) {
+  try { localStorage.setItem(userKey('notifSeenTs'), String(ts)); } catch {}
+}
+function pushNotification(msg, type='', source='toast') {
+  const n = { id: 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), msg, type, source, ts: Date.now() };
+  const list = getNotifications();
+  list.unshift(n);
+  if (list.length > 100) list.length = 100;
+  setNotifications(list);
+  bumpCloudVersion();
+  return n;
+}
 function toast(msg, type='', dur=3000) {
   broadcastToast(msg, type); // mirror to same-browser tabs instantly
+  pushNotification(msg, type, 'toast');
   document.querySelectorAll('.toast').forEach(t => { t.classList.remove('on'); t.remove(); });
   const t = document.createElement('div');
   t.className = 'toast' + (type ? ' ' + type : '');
@@ -308,11 +326,12 @@ function toast(msg, type='', dur=3000) {
 }
 
 /* ════════════════════════════════════════
-   DEV LOG
+   DEV LOG + NOTIFICATION LOG
    ════════════════════════════════════════ */
 function devLog(msg, type='') {
   if (currentMode !== 'dev' && currentMode !== 'root') return;
   broadcastDevLog(msg, type); // mirror to same-browser tabs instantly
+  pushNotification(msg, type, 'devlog');
   const p = $('devPanel');
   const line = document.createElement('div');
   line.className = 'dev-log ' + (type || '');
@@ -597,9 +616,33 @@ async function pullSettingsUsage() {
         }
       }
     }
+    /* Replay unseen notifications from other devices so toasts/devlogs live sync. */
+    replayRemoteNotifications();
     /* Refresh any open capsule panel when a capsule arrives from another device. */
     if (typeof checkCapsules === 'function') checkCapsules();
   } catch { /* cloud unavailable — keep local */ }
+}
+
+/* Pull the notification log from cloud, replay any entries newer than the
+   last timestamp this device has seen, then advance the seen cursor.
+   This makes every toast/devlog visible on all devices with the same 3s
+   latency as the rest of the live-sync stack. */
+async function replayRemoteNotifications() {
+  if (!user || !window.puter || typeof puter.kv?.get !== 'function') return;
+  try {
+    const remote = await cloudPull(userKey('notifications'));
+    if (!remote || !Array.isArray(remote)) return;
+    const seen = getLastNotifSeenTs();
+    const unseen = remote.filter(n => n.ts > seen);
+    unseen.forEach(n => {
+      if (n.source === 'devlog' && (currentMode === 'dev' || currentMode === 'root')) {
+        devLog(n.msg, n.type || '');
+      } else {
+        toast(n.msg, n.type || '');
+      }
+    });
+    if (unseen.length) setLastNotifSeenTs(unseen[0].ts);
+  } catch { /* cloud unavailable for notifications — skip */ }
 }
 /* Cross-device delete: mark the id as tombstoned everywhere, drop it
    locally, and push immediately. The live-sync loop (below) then
