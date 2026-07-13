@@ -399,9 +399,9 @@ function save(d) {
    ════════════════════════════════════════ */
 function cloudPush(key, value) {
   try {
-    if (!window.puter || typeof puter.kv?.set !== 'function') return;
-    Promise.resolve(puter.kv.set(key, value)).catch(() => {});
-  } catch { /* offline / quota — keep local only */ }
+    if (!window.puter || typeof puter.kv?.set !== 'function') return Promise.resolve();
+    return Promise.resolve(puter.kv.set(key, value)).catch(() => {});
+  } catch { return Promise.resolve(); }
 }
 async function cloudPull(key) {
   try {
@@ -521,15 +521,16 @@ async function pullSettingsUsage() {
       let local;
       if (base === 'theme') {
         local = getSetting('theme', null);
-      } else {
-        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
-      }
-      if (base === 'theme') {
-        if (remote !== local) {
-          localStorage.setItem('musa_theme', remote);
-          document.body.setAttribute('data-theme', remote);
+        if (remote && typeof remote === 'object' && remote.v) {
+          const remoteTs = remote.ts || 0;
+          const localTs = (local && local.ts) || 0;
+          if (remoteTs > localTs) {
+            setSetting('theme', remote);
+            document.body.setAttribute('data-theme', remote.v);
+          }
         }
       } else if (base === 'capsules') {
+        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
         const a = Array.isArray(local) ? local : [];
         const b = Array.isArray(remote) ? remote : [];
         const byId = {}; a.forEach(c => byId[c.id] = c); let added = 0;
@@ -537,6 +538,7 @@ async function pullSettingsUsage() {
         const merged = Object.values(byId);
         localStorage.setItem(userKey(base), JSON.stringify(merged));
       } else {
+        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
         if (JSON.stringify(remote) !== JSON.stringify(local ?? '')) {
           localStorage.setItem(userKey(base), JSON.stringify(remote));
         }
@@ -665,8 +667,8 @@ function setCapsules(v) { setSetting('capsules', v); }
    AUTH
    ════════════════════════════════════════ */
 async function boot() {
-  const saved = localStorage.getItem('musa_theme') || 'dark';
-  document.body.setAttribute('data-theme', saved);
+  const saved = getSetting('theme', { v: 'dark', ts: 0 });
+  document.body.setAttribute('data-theme', saved.v);
 
   /* Always verify the live Puter session — never trust the cache alone.
      The cache is only used to match the correct per-user data store AFTER
@@ -792,8 +794,8 @@ $('sbSearchInput').addEventListener('input', function() {
 function toggleTheme() {
   const next = (document.body.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
   document.body.setAttribute('data-theme', next);
-  localStorage.setItem('musa_theme', next);
-  setSetting('theme', next); // cloud push for live cross-device sync
+  setSetting('theme', { v: next, ts: Date.now() });
+  bumpCloudVersion(); // other devices pull on next 3s tick
   toast(next === 'dark' ? 'Dark mode' : 'Light mode');
 }
 $('themeBtn').onclick = toggleTheme;
