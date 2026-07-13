@@ -469,7 +469,7 @@ async function cloudSyncUser(isLive) {
     if (isLive) {
       renderHistory();
       loadBranchesFromStore(); // refresh in-memory branches/branchCounter from merged store
-      if (activeBranch === null) renderActiveChat(); // only render main thread; branch view is self-managed
+      renderActiveChat(); // always render — branch view is self-managed inside renderActiveChat
     } else if (changed) {
       devLog('Synced ' + merged.chats.length + ' chat(s) from cloud', 'ok');
     }
@@ -1178,20 +1178,25 @@ function renderBranchBar() {
 
 /* Create a branch from a specific message index in main thread */
 function forkAtIndex(forkIndex) {
-  // Save current thread before switching
   saveCurrentThreadState();
+  loadBranchesFromStore(); // refresh in-memory state from store
 
-  branchCounter++;
+  const maxNum = branches.reduce((max, br) => {
+    const n = parseInt((br.name || '').replace('Branch ', ''), 10);
+    return isNaN(n) ? max : Math.max(max, n);
+  }, 0);
+  branchCounter = maxNum + 1;
+
   const br = {
     id: 'br_' + Date.now(),
     name: 'Branch ' + branchCounter,
-    forkIndex,                          // last shared message index (inclusive)
-    msgs: []                            // starts empty — user will type here
+    forkIndex,
+    msgs: []
   };
   branches.push(br);
   activeBranch = br.id;
 
-  // Rebuild chat display: show shared msgs up to forkIndex, then fork marker
+  chatMsgs = [...getMainMsgs().slice(0, forkIndex + 1)];
   rebuildChatForBranch(br);
   renderBranchBar();
   saveBranchesToStore();
@@ -1284,8 +1289,9 @@ function switchToMain() {
 function switchToBranch(brId) {
   if (activeBranch === brId) return;
   saveCurrentThreadState();
+  loadBranchesFromStore(); // refresh from store so we don't use stale in-memory data
   const br = branches.find(b => b.id === brId);
-  if (!br) return;
+  if (!br) { switchToMain(); return; }
   activeBranch = brId;
   setSetting('activeBranch', activeBranch); // sync to cloud
   chatMsgs = [...br.msgs];
