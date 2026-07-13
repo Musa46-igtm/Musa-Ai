@@ -519,7 +519,7 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'generating']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
       let local;
@@ -561,6 +561,19 @@ async function pullSettingsUsage() {
           const dot = $('modelDot'); if (dot) dot.className = 'model-dot ' + (MODELS[selectedModel] ? MODELS[selectedModel].dot : 'musa');
           document.querySelectorAll('.model-opt').forEach(o => o.classList.toggle('selected', o.dataset.model === selectedModel));
           toast('Model: ' + label);
+        }
+      } else if (base === 'activeBranch') {
+        if (remote && remote !== activeBranch) {
+          activeBranch = remote;
+          const chat = store().chats.find(c => c.id === chatId);
+          if (chat) {
+            const br = (chat.branches || []).find(b => b.id === activeBranch);
+            if (br) {
+              switchToBranch(br.id); // switch to remote branch
+            } else if (activeBranch === null) {
+              switchToMain(); // switch to main thread
+            }
+          }
         }
       } else if (base === 'generating') {
         if (remote && typeof remote === 'object') {
@@ -941,6 +954,9 @@ async function callAI(userMsg, imgDataUrl, isRegen = false) {
   /* Show the typing indicator while we wait for the model (only when a
      real response is coming — not for memory interception, which is separate). */
   showTyping();
+  /* Ensure typing indicator stays visible for at least 400ms so it
+     doesn't flash invisibly on fast responses. */
+  const _minTyping = Date.now() + 400;
 
   /* Real abort handle: Puter chat accepts AbortSignal. This makes the
      STOP button actually cancel a hung request instead of no-op'ing. */
@@ -1254,6 +1270,7 @@ function switchToMain() {
   if (activeBranch === null) return;
   saveCurrentThreadState();
   activeBranch = null;
+  setSetting('activeBranch', null); // sync branch switch to cloud
   chatMsgs = getMainMsgs();
   rebuildChatFromMsgs(chatMsgs, null);
   renderBranchBar();
@@ -1267,6 +1284,7 @@ function switchToBranch(brId) {
   const br = branches.find(b => b.id === brId);
   if (!br) return;
   activeBranch = brId;
+  setSetting('activeBranch', activeBranch); // sync branch switch to cloud
   chatMsgs = [...br.msgs];
   rebuildChatForBranch(br);
   renderBranchBar();
@@ -2055,8 +2073,11 @@ function showTyping() {
   $('chat').appendChild(r); scrollBot(true); _typingRow = r; return r;
 }
 function removeTyping() {
-  if (_typingRow && _typingRow.parentNode) _typingRow.remove();
-  _typingRow = null;
+  const wait = Math.max(0, _minTyping - Date.now());
+  setTimeout(() => {
+    if (_typingRow && _typingRow.parentNode) _typingRow.remove();
+    _typingRow = null;
+  }, wait);
 }
 
 /* ════════════════════════════════════════
