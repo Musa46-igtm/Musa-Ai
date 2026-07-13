@@ -563,32 +563,15 @@ async function pullSettingsUsage() {
           toast('Model: ' + label);
         }
       } else if (base === 'activeBranch') {
-        if (remote && remote !== activeBranch) {
+        if (remote === null || remote === undefined) {
+          if (activeBranch !== null) { activeBranch = null; switchToMain(); }
+        } else if (remote !== activeBranch) {
           activeBranch = remote;
           const chat = store().chats.find(c => c.id === chatId);
           if (chat) {
             const br = (chat.branches || []).find(b => b.id === activeBranch);
-            if (br) {
-              switchToBranch(br.id); // switch to remote branch
-            } else if (activeBranch === null) {
-              switchToMain(); // switch to main thread
-            }
-          }
-        }
-      } else if (base === 'activeBranch') {
-        if ((remote === null || remote === undefined) && activeBranch !== null) {
-          activeBranch = null;
-          switchToMain();
-        } else if (remote !== null && remote !== undefined && remote !== activeBranch) {
-          activeBranch = remote;
-          const chat = store().chats.find(c => c.id === chatId);
-          if (chat) {
-            const br = (chat.branches || []).find(b => b.id === activeBranch);
-            if (br) {
-              switchToBranch(br.id);
-            } else if (activeBranch === null) {
-              switchToMain();
-            }
+            if (br) { switchToBranch(br.id); }
+            else { activeBranch = null; switchToMain(); } // remote branch was deleted
           }
         }
       } else if (base === 'generating') {
