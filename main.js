@@ -607,8 +607,7 @@ function getSetting(base, fallback) {
 function setSetting(base, value) {
   const k = userKey(base);
   localStorage.setItem(k, JSON.stringify(value));
-  cloudPush(k, value); // mirror to cloud (non-blocking)
-  bumpCloudVersion(); // let other devices pull this setting live
+  cloudPush(k, value); // mirror to cloud
 }
 /* Migrate the old global memory / system-prompt keys into the new per-user cloud store */
 function migrateLegacySettings() {
@@ -791,11 +790,13 @@ $('sbSearchInput').addEventListener('input', function() {
 /* ════════════════════════════════════════
    THEME
    ════════════════════════════════════════ */
-function toggleTheme() {
+async function toggleTheme() {
   const next = (document.body.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
   document.body.setAttribute('data-theme', next);
-  setSetting('theme', { v: next, ts: Date.now() });
-  bumpCloudVersion(); // other devices pull on next 3s tick
+  const payload = { v: next, ts: Date.now() };
+  setSetting('theme', payload); // update localStorage via per-user key
+  await cloudPush(userKey('theme'), payload); // AWAIT the cloud write
+  bumpCloudVersion(); // bump rev AFTER theme is confirmed in cloud
   toast(next === 'dark' ? 'Dark mode' : 'Light mode');
 }
 $('themeBtn').onclick = toggleTheme;
