@@ -386,6 +386,7 @@ function save(d) {
   try { localStorage.setItem('musa2_' + user, JSON.stringify(d)); } catch(e) { /* quota — ignore */ }
   cloudPush('musa2_' + user, d); // mirror to cloud (cross-device sync) — non-blocking
   bumpCloudVersion(); // signal other devices/tabs that something changed
+  broadcastChange(); // instant same-browser notification
 }
 
 /* ════════════════════════════════════════
