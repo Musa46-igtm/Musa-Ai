@@ -521,13 +521,16 @@ async function pullSettingsUsage() {
       let local;
       if (base === 'theme') {
         local = getSetting('theme', null);
+        let winner = remote;
         if (remote && typeof remote === 'object' && remote.v) {
           const remoteTs = remote.ts || 0;
           const localTs = (local && local.ts) || 0;
-          if (remoteTs > localTs) {
-            setSetting('theme', remote);
-            document.body.setAttribute('data-theme', remote.v);
-          }
+          if (remoteTs >= localTs) winner = remote; else winner = local;
+        }
+        const current = document.body.getAttribute('data-theme') || 'dark';
+        if (winner && winner.v && winner.v !== current) {
+          setSetting('theme', winner);
+          document.body.setAttribute('data-theme', winner.v);
         }
       } else if (base === 'capsules') {
         try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
