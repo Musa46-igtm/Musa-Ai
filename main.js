@@ -799,12 +799,11 @@ $('modelDrop').addEventListener('click', e => {
   if (opt.classList.contains('limited')) { toast('GPT-4o is rate-limited — restoring soon', 'err'); return; }
   /* Normalize whatever the UI label says to a model that Puter actually
      accepts — this keeps the friendly labels but never sends an invalid id. */
-  const MODEL_ALIASES = { 'gpt-4o':'gpt-4o-mini', 'gpt-4o-mini':'gpt-4o-mini' };
   const picked = opt.dataset.model;
-  selectedModel = MODEL_ALIASES[picked] || 'gpt-4o-mini';
-  const label = MODELS[selectedModel] ? MODELS[selectedModel].label : (MODELS[picked] ? MODELS[picked].label : picked);
+  selectedModel = picked;
+  const label = MODELS[selectedModel] ? MODELS[selectedModel].label : picked;
   $('modelLabel').textContent = label;
-  $('modelDot').className = 'model-dot ' + (MODELS[selectedModel] ? MODELS[selectedModel].dot : (MODELS[picked] ? MODELS[picked].dot : 'musa'));
+  $('modelDot').className = 'model-dot ' + (MODELS[selectedModel] ? MODELS[selectedModel].dot : 'musa');
   document.querySelectorAll('.model-opt').forEach(o => o.classList.toggle('selected', o.dataset.model === picked));
   opt.classList.add('selected');
   $('modelDrop').classList.remove('on');
