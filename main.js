@@ -1261,7 +1261,9 @@ function loadBranchesFromStore() {
   if (!chat) { resetBranches(); return; }
   branches = chat.branches ? [...chat.branches] : [];
   branchCounter = chat.branchCounter || 0;
-  activeBranch = null;
+  /* Do NOT reset activeBranch here — it may have been pushed by another
+     device via setSetting('activeBranch', ...) and applied in pullSettingsUsage.
+     We only re-render the bar so the UI reflects whatever activeBranch is. */
   renderBranchBar();
 }
 
