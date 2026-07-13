@@ -574,9 +574,10 @@ function startLiveSync() {
   if (typeof BroadcastChannel !== 'undefined') {
     try {
       _bc = new BroadcastChannel('musa2_sync_' + (user || 'anon'));
-      _bc.onmessage = (e) => {
+      _bc.onmessage = async (e) => {
         if (e.data && e.data.type === 'changed') {
-          cloudSyncUser(true); // pull immediately
+          await cloudSyncUser(true);
+          await pullSettingsUsage(); // instant settings/theme/usage sync on same-browser tab change
         }
       };
     } catch { _bc = null; }
