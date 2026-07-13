@@ -296,6 +296,7 @@ function relativeTime(iso) {
    TOAST
    ════════════════════════════════════════ */
 function toast(msg, type='', dur=3000) {
+  broadcastToast(msg, type); // mirror to same-browser tabs instantly
   document.querySelectorAll('.toast').forEach(t => { t.classList.remove('on'); t.remove(); });
   const t = document.createElement('div');
   t.className = 'toast' + (type ? ' ' + type : '');
@@ -311,6 +312,7 @@ function toast(msg, type='', dur=3000) {
    ════════════════════════════════════════ */
 function devLog(msg, type='') {
   if (currentMode !== 'dev' && currentMode !== 'root') return;
+  broadcastDevLog(msg, type); // mirror to same-browser tabs instantly
   const p = $('devPanel');
   const line = document.createElement('div');
   line.className = 'dev-log ' + (type || '');
@@ -516,7 +518,7 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
       let local;
@@ -536,6 +538,28 @@ async function pullSettingsUsage() {
       } else if (base === 'mode') {
         if (remote && ['norm','dev','root'].includes(remote) && remote !== currentMode) {
           setMode(remote);
+        }
+      } else if (base === 'tone') {
+        if (remote && remote !== currentTone) {
+          currentTone = remote;
+          const ind = $('toneIndicator'); if (ind) ind.style.background = (TONES[currentTone] || {}).color || '';
+          document.querySelectorAll('.tone-opt').forEach(o => o.classList.toggle('active', o.dataset.tone === currentTone));
+          toast('Tone: ' + (TONES[currentTone] || {}).label || currentTone);
+        }
+      } else if (base === 'chaos') {
+        if (typeof remote === 'boolean' && remote !== chaosMode) {
+          chaosMode = remote;
+          const btn = $('chaosToggleBtn'); if (btn) btn.classList.toggle('active', chaosMode);
+          toast(chaosMode ? 'Chaos Mode ON' : 'Chaos Mode OFF');
+        }
+      } else if (base === 'model') {
+        if (remote && remote !== selectedModel) {
+          selectedModel = remote;
+          const label = MODELS[selectedModel] ? MODELS[selectedModel].label : selectedModel;
+          const lbl = $('modelLabel'); if (lbl) lbl.textContent = label;
+          const dot = $('modelDot'); if (dot) dot.className = 'model-dot ' + (MODELS[selectedModel] ? MODELS[selectedModel].dot : 'musa');
+          document.querySelectorAll('.model-opt').forEach(o => o.classList.toggle('selected', o.dataset.model === selectedModel));
+          toast('Model: ' + label);
         }
       } else if (base === 'capsules') {
         try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
@@ -585,7 +609,11 @@ function startLiveSync() {
       _bc.onmessage = async (e) => {
         if (e.data && e.data.type === 'changed') {
           await cloudSyncUser(true);
-          await pullSettingsUsage(); // instant settings/theme/usage sync on same-browser tab change
+          await pullSettingsUsage();
+        } else if (e.data && e.data.type === 'toast') {
+          toast(e.data.msg, e.data.type || '');
+        } else if (e.data && e.data.type === 'devlog') {
+          devLog(e.data.msg, e.data.type || '');
         }
       };
     } catch { _bc = null; }
@@ -598,6 +626,12 @@ function stopLiveSync() {
 /* When this tab saves, tell other tabs on the SAME browser to pull now. */
 function broadcastChange() {
   if (_bc) { try { _bc.postMessage({ type: 'changed' }); } catch {} }
+}
+function broadcastToast(msg, type='') {
+  if (_bc) { try { _bc.postMessage({ type: 'toast', msg, type }); } catch {} }
+}
+function broadcastDevLog(msg, type='') {
+  if (_bc) { try { _bc.postMessage({ type: 'devlog', msg, type }); } catch {} }
 }
 function syncUp()   { /* chats are now mirrored to cloud via cloudPush in save() */ }
 function syncDown() { return cloudSyncUser(); }
@@ -823,6 +857,7 @@ $('modelDrop').addEventListener('click', e => {
      accepts — this keeps the friendly labels but never sends an invalid id. */
   const picked = opt.dataset.model;
   selectedModel = picked;
+  setSetting('model', selectedModel); // push model to cloud for cross-device sync
   const label = MODELS[selectedModel] ? MODELS[selectedModel].label : picked;
   $('modelLabel').textContent = label;
   $('modelDot').className = 'model-dot ' + (MODELS[selectedModel] ? MODELS[selectedModel].dot : 'musa');
@@ -998,6 +1033,7 @@ document.addEventListener('click', e => {
 $('toneDrop').addEventListener('click', e => {
   const opt = e.target.closest('.tone-opt'); if (!opt) return;
   currentTone = opt.dataset.tone;
+  setSetting('tone', currentTone); // push tone to cloud for cross-device sync
   document.querySelectorAll('.tone-opt').forEach(o => o.classList.remove('active'));
   opt.classList.add('active');
   $('toneIndicator').style.background = TONES[currentTone].color;
@@ -1006,6 +1042,7 @@ $('toneDrop').addEventListener('click', e => {
 });
 $('chaosToggleBtn').onclick = () => {
   chaosMode = !chaosMode;
+  setSetting('chaos', chaosMode); // push chaos mode to cloud for cross-device sync
   $('chaosToggleBtn').classList.toggle('active', chaosMode);
   toast(chaosMode ? 'Chaos Mode ON' : 'Chaos Mode OFF');
 };
