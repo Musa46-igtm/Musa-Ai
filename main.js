@@ -468,8 +468,8 @@ async function cloudSyncUser(isLive) {
     localStorage.setItem('musa2_' + user, JSON.stringify(merged));
     if (isLive) {
       renderHistory();
-      renderActiveChat(); // re-render the open chat if its messages changed remotely
-                            // (renderActiveChat self-guards: no-op if nothing changed)
+      loadBranchesFromStore(); // refresh in-memory branches/branchCounter from merged store
+      if (activeBranch === null) renderActiveChat(); // only render main thread; branch view is self-managed
     } else if (changed) {
       devLog('Synced ' + merged.chats.length + ' chat(s) from cloud', 'ok');
     }
