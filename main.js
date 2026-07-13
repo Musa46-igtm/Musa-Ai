@@ -1426,7 +1426,11 @@ function renderHistory(filter='') {
 function renderActiveChat() {
   if (!chatId || busy) return;
   const c = store().chats.find(x => x.id === chatId);
-  if (!c) return;
+  if (!c) {
+    // Active chat was deleted remotely (or locally) — redirect to fresh chat
+    chatId = null; chatMsgs = []; $('chat').innerHTML = '';
+    showWelcome(); return;
+  }
   const msgs = c.msgs || [];
   const sameCount = msgs.length === chatMsgs.length;
   const lastSame = sameCount && msgs.length > 0 &&
