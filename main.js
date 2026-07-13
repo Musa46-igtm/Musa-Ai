@@ -575,6 +575,22 @@ async function pullSettingsUsage() {
             }
           }
         }
+      } else if (base === 'activeBranch') {
+        if ((remote === null || remote === undefined) && activeBranch !== null) {
+          activeBranch = null;
+          switchToMain();
+        } else if (remote !== null && remote !== undefined && remote !== activeBranch) {
+          activeBranch = remote;
+          const chat = store().chats.find(c => c.id === chatId);
+          if (chat) {
+            const br = (chat.branches || []).find(b => b.id === activeBranch);
+            if (br) {
+              switchToBranch(br.id);
+            } else if (activeBranch === null) {
+              switchToMain();
+            }
+          }
+        }
       } else if (base === 'generating') {
         if (remote && typeof remote === 'object') {
           document.querySelectorAll('.sb-item.generating').forEach(el => el.classList.remove('generating'));
@@ -1196,7 +1212,10 @@ function forkAtIndex(forkIndex) {
   rebuildChatForBranch(br);
   renderBranchBar();
   saveBranchesToStore();
+  cloudPush(userKey('branches'), JSON.stringify({ branches, branchCounter }));
+  broadcastChange();
   toast(`Branch ${br.name} created`, 'ok');
+  broadcastToast(`Branch ${br.name} created`, 'ok');
   devLog('Forked at message index ' + forkIndex);
 }
 
@@ -1272,6 +1291,7 @@ function switchToMain() {
   rebuildChatFromMsgs(chatMsgs, null);
   renderBranchBar();
   toast('↩ Switched to main thread');
+  broadcastToast('↩ Switched to main thread');
 }
 
 /* Switch to an existing branch */
@@ -1286,6 +1306,7 @@ function switchToBranch(brId) {
   rebuildChatForBranch(br);
   renderBranchBar();
   toast(`Switched to ${br.name}`);
+  broadcastToast(`Switched to ${br.name}`);
 }
 
 /* Delete a branch */
@@ -1293,8 +1314,10 @@ function deleteBranch(brId) {
   if (activeBranch === brId) switchToMain();
   branches = branches.filter(b => b.id !== brId);
   saveBranchesToStore();
+  cloudPush(userKey('branches'), JSON.stringify({ branches, branchCounter }));
+  broadcastChange();
   renderBranchBar();
-  toast('Branch deleted');
+  toast('Branch deleted', 'ok');
 }
 
 /* Rebuild the chat area to show shared prefix + branch-specific messages */
