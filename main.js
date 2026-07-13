@@ -516,11 +516,21 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
-      const local = (() => { try { return JSON.parse(localStorage.getItem(userKey(base))); } catch { return null; } })();
-      if (base === 'capsules') {
+      let local;
+      if (base === 'theme') {
+        local = localStorage.getItem('musa_theme');
+      } else {
+        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
+      }
+      if (base === 'theme') {
+        if (remote !== local) {
+          localStorage.setItem('musa_theme', remote);
+          document.body.setAttribute('data-theme', remote);
+        }
+      } else if (base === 'capsules') {
         const a = Array.isArray(local) ? local : [];
         const b = Array.isArray(remote) ? remote : [];
         const byId = {}; a.forEach(c => byId[c.id] = c); let added = 0;
@@ -784,6 +794,7 @@ function toggleTheme() {
   const next = (document.body.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
   document.body.setAttribute('data-theme', next);
   localStorage.setItem('musa_theme', next);
+  setSetting('theme', next); // cloud push for live cross-device sync
   toast(next === 'dark' ? 'Dark mode' : 'Light mode');
 }
 $('themeBtn').onclick = toggleTheme;
