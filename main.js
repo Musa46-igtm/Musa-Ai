@@ -878,6 +878,7 @@ function markGpt4oLimited() {
   if (opt4o) opt4o.classList.add('limited');
   /* Switch to mini */
   selectedModel = 'gpt-4o-mini';
+  setSetting('model', selectedModel); // push fallback model to cloud for cross-device sync
   $('modelLabel').textContent = MODELS['gpt-4o-mini'].label;
   $('modelDot').className = 'model-dot musa';
   document.querySelectorAll('.model-opt').forEach(o => o.classList.remove('selected'));
@@ -2153,20 +2154,15 @@ function setBusy(state) {
   /* Sidebar generating indicator */
   if (state) {
     document.querySelector('.sb-item.active')?.classList.add('generating');
+    setSetting('generating', { chatId: chatId || null, busy: true }); // cloud-sync generating state
+    broadcastChange(); // instant same-browser notification
   } else {
     document.querySelectorAll('.sb-item.generating').forEach(el => el.classList.remove('generating'));
+    setSetting('generating', { chatId: chatId || null, busy: false }); // clear generating state
+    broadcastChange();
   }
-  if (state) {
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><rect x="5" y="5" width="14" height="14" rx="3"/></svg>';
-    btn.disabled = false;
-    btn.title = 'Stop generation';
-    btn.style.color = 'var(--red,#f87171)';
-  } else {
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 4v16M12 4L6 10M12 4l6 6"/></svg>';
-    btn.title = '';
-    btn.style.color = '';
-    updateSendBtn();
-  }
+  /* Update send button text */
+  if (btn) btn.textContent = state ? 'Stop' : 'Send';
 }
 
 function updateSendBtn() {
