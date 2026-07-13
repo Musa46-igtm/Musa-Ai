@@ -1306,6 +1306,11 @@ function switchToBranch(brId) {
 function deleteBranch(brId) {
   if (activeBranch === brId) switchToMain();
   branches = branches.filter(b => b.id !== brId);
+  const maxNum = branches.reduce((max, br) => {
+    const n = parseInt((br.name || '').replace('Branch ', ''), 10);
+    return isNaN(n) ? max : Math.max(max, n);
+  }, 0);
+  branchCounter = maxNum;
   saveBranchesToStore();
   cloudPush(userKey('branches'), JSON.stringify({ branches, branchCounter }));
   broadcastChange();
