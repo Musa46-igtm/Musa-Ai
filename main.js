@@ -2609,7 +2609,7 @@ function checkCapsules() {
       try {
         const preview = c.text.length > 100 ? c.text.slice(0, 100) + '…' : c.text;
         const n = new Notification('🕰 Time Capsule Arrived', {
-          body: `Written ${new Date(c.createdAt).toLocaleDateString()}: "${preview}"`,
+          body: `Written ${new Date(c.createdAt).toLocaleDateString([], { timeZone:'Africa/Lagos' })}: "${preview}"`,
           tag: 'musa-capsule-' + c.id,
           requireInteraction: true
         });
