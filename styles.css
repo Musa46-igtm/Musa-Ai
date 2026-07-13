@@ -546,11 +546,11 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
 .typing-row { display:flex; align-items:center; gap:8px; padding:6px 0; }
 .dot-anim span {
   display:inline-block; width:6px; height:6px; border-radius:50%;
-  background:var(--accent); animation:dotBounce 1.2s ease-in-out infinite;
+  background:var(--text-2); animation:dotBounce 1.2s ease-in-out infinite;
 }
 .dot-anim span:nth-child(2) { animation-delay:.15s; }
 .dot-anim span:nth-child(3) { animation-delay:.3s; }
-@keyframes dotBounce { 0%,80%,100% { transform:translateY(0); opacity:.35; } 40% { transform:translateY(-6px); opacity:1; } }
+@keyframes dotBounce { 0%,80%,100% { transform:translateY(0); opacity:.4; } 40% { transform:translateY(-6px); opacity:1; } }
 
 /* File preview */
 .file-pill {

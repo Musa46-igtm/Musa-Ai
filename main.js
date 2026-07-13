@@ -954,9 +954,6 @@ async function callAI(userMsg, imgDataUrl, isRegen = false) {
   /* Show the typing indicator while we wait for the model (only when a
      real response is coming — not for memory interception, which is separate). */
   showTyping();
-  /* Ensure typing indicator stays visible for at least 400ms so it
-     doesn't flash invisibly on fast responses. */
-  const _minTyping = Date.now() + 400;
 
   /* Real abort handle: Puter chat accepts AbortSignal. This makes the
      STOP button actually cancel a hung request instead of no-op'ing. */
@@ -2073,11 +2070,8 @@ function showTyping() {
   $('chat').appendChild(r); scrollBot(true); _typingRow = r; return r;
 }
 function removeTyping() {
-  const wait = Math.max(0, _minTyping - Date.now());
-  setTimeout(() => {
-    if (_typingRow && _typingRow.parentNode) _typingRow.remove();
-    _typingRow = null;
-  }, wait);
+  if (_typingRow && _typingRow.parentNode) _typingRow.remove();
+  _typingRow = null;
 }
 
 /* ════════════════════════════════════════
