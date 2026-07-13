@@ -936,8 +936,8 @@ async function callAI(userMsg, imgDataUrl, isRegen = false) {
       return;
     }
     const ts = new Date().toISOString();
-    chatMsgs.push({ role: 'ai', text, tone, ts });
-    renderMsg(text, 'ai', true, null, tone, aiIdx, false, ts);
+    chatMsgs.push({ role: 'ai', text, tone, ts, model: selectedModel });
+    renderMsg(text, 'ai', true, null, tone, aiIdx, false, ts, selectedModel);
     applyCode($('chat').querySelector('.msg.ai:last-child .msg-prose'));
     addFollowups(text).catch(() => {});
     trackUsage(userMsg.length, text.length);
@@ -1222,7 +1222,7 @@ function rebuildChatForBranch(br) {
 
   // Render shared messages (dimmed to show they are the common root)
   sharedMsgs.forEach((m, i) => {
-    renderMsg(m.text, m.role, false, m.img || null, m.tone || null, i, true, m.ts || null);
+    renderMsg(m.text, m.role, false, m.img || null, m.tone || null, i, true, m.ts || null, m.model || null);
   });
 
   // Fork point marker
@@ -1241,7 +1241,7 @@ function rebuildChatForBranch(br) {
   const startIdx = sharedMsgs.length;
   chatMsgs = [...br.msgs];
   br.msgs.forEach((m, i) => {
-    renderMsg(m.text, m.role, false, m.img || null, m.tone || null, startIdx + i, false, m.ts || null);
+    renderMsg(m.text, m.role, false, m.img || null, m.tone || null, startIdx + i, false, m.ts || null, m.model || null);
   });
 
   scrollBot(false);
@@ -1252,7 +1252,7 @@ function rebuildChatFromMsgs(msgs, brId) {
   const chat = $('chat');
   chat.innerHTML = '';
   msgs.forEach((m, i) => {
-    renderMsg(m.text, m.role, false, m.img || null, m.tone || null, i, false, m.ts || null);
+    renderMsg(m.text, m.role, false, m.img || null, m.tone || null, i, false, m.ts || null, m.model || null);
   });
   scrollBot(false);
 }
@@ -1388,7 +1388,7 @@ function renderHistory(filter='') {
         updateModeUI(currentMode);
       }
       $('chat').innerHTML = '';
-      c.msgs.forEach((m, i) => renderMsg(m.text, m.role, false, m.img, m.tone, i, false, m.ts || null));
+      c.msgs.forEach((m, i) => renderMsg(m.text, m.role, false, m.img, m.tone, i, false, m.ts || null, m.model || null));
       requestAnimationFrame(() => { $('chat').scrollTop = $('chat').scrollHeight; });
       showChat(false);
       document.querySelectorAll('.sb-item').forEach(x => x.classList.remove('active'));
@@ -1417,7 +1417,7 @@ function renderActiveChat() {
   if (sameCount && lastSame) return; // nothing new for this open chat
   chatMsgs = [...msgs];
   $('chat').innerHTML = '';
-  msgs.forEach((m, i) => renderMsg(m.text, m.role, false, m.img, m.tone, i, false, m.ts || null));
+  msgs.forEach((m, i) => renderMsg(m.text, m.role, false, m.img, m.tone, i, false, m.ts || null, m.model || null));
   requestAnimationFrame(() => { $('chat').scrollTop = $('chat').scrollHeight; });
   if (typeof loadBranchesFromStore === 'function') loadBranchesFromStore();
 }
@@ -1660,7 +1660,7 @@ async function saveChat() {
    ════════════════════════════════════════ */
 /* msgIndex: the index of this message in the effective list (used for branch fork point)
    isShared: true when rendering a shared-root message in a branch view (dimmed, no retry/branch) */
-function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null, msgIndex=null, isShared=false, msgTs=null) {
+function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null, msgIndex=null, isShared=false, msgTs=null, msgModel=null) {
   const activeTone = msgTone || (role === 'ai' ? currentTone : null);
   const chat = $('chat');
   const row = document.createElement('div');
@@ -1671,7 +1671,7 @@ function renderMsg(text, role, animate=true, imgDataUrl=null, msgTone=null, msgI
   const timeStr = msgTs
     ? new Date(msgTs).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', timeZone:'Africa/Lagos' })
     : new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', timeZone:'Africa/Lagos' });
-  const modelTag = role === 'ai' ? `<span class="msg-model-tag">${MODELS[selectedModel]?.label || 'AI'}</span>` : '';
+  const modelTag = role === 'ai' ? `<span class="msg-model-tag">${(msgModel ? MODELS[msgModel]?.label : MODELS[selectedModel]?.label) || 'AI'}</span>` : '';
   const toneTag = role === 'ai' && activeTone && activeTone !== 'default'
     ? `<span class="msg-tone-tag" style="background:${TONES[activeTone].color}33; color:${TONES[activeTone].color};">${TONES[activeTone].label}</span>`
     : '';
@@ -2503,9 +2503,9 @@ async function doSend() {
     const saved = saveToMemory(memItem);
     if (saved) {
       const confirmText = `Got it! I've saved that to your memory:\n\n> ${memItem}\n\nI'll keep this in mind for all future conversations.`;
-      chatMsgs.push({ role:'ai', text: confirmText, tone: 'default', ts: new Date().toISOString() });
+      chatMsgs.push({ role:'ai', text: confirmText, tone: 'default', ts: new Date().toISOString(), model: selectedModel });
       const aiIdx = chatMsgs.length - 1;
-      renderMsg(confirmText, 'ai', true, null, 'default', aiIdx, false, chatMsgs[aiIdx].ts);
+      renderMsg(confirmText, 'ai', true, null, 'default', aiIdx, false, chatMsgs[aiIdx].ts, selectedModel);
       toast('Saved to memory!', 'ok');
       if (!chatId) {
         chatId = Date.now().toString();
@@ -2515,9 +2515,9 @@ async function doSend() {
       } else { await saveChat(); }
     } else {
       const alreadyText = `That's already in your memory! Here's what I know:\n\n> ${memItem}`;
-      chatMsgs.push({ role:'ai', text: alreadyText, tone: 'default', ts: new Date().toISOString() });
+      chatMsgs.push({ role:'ai', text: alreadyText, tone: 'default', ts: new Date().toISOString(), model: selectedModel });
       const alreadyIdx = chatMsgs.length - 1;
-      renderMsg(alreadyText, 'ai', true, null, 'default', alreadyIdx, false, chatMsgs[alreadyIdx].ts);
+      renderMsg(alreadyText, 'ai', true, null, 'default', alreadyIdx, false, chatMsgs[alreadyIdx].ts, selectedModel);
       if (chatId) await saveChat();
     }
     return;
