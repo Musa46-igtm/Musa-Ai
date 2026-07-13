@@ -520,7 +520,7 @@ async function pullSettingsUsage() {
       if (remote === null || remote === undefined) continue;
       let local;
       if (base === 'theme') {
-        local = localStorage.getItem('musa_theme');
+        local = getSetting('theme', null);
       } else {
         try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
       }
