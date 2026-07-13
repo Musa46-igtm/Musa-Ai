@@ -519,7 +519,7 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'generating']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
       let local;
@@ -561,6 +561,14 @@ async function pullSettingsUsage() {
           const dot = $('modelDot'); if (dot) dot.className = 'model-dot ' + (MODELS[selectedModel] ? MODELS[selectedModel].dot : 'musa');
           document.querySelectorAll('.model-opt').forEach(o => o.classList.toggle('selected', o.dataset.model === selectedModel));
           toast('Model: ' + label);
+        }
+      } else if (base === 'generating') {
+        if (remote && typeof remote === 'object') {
+          document.querySelectorAll('.sb-item.generating').forEach(el => el.classList.remove('generating'));
+          if (remote.busy && remote.chatId) {
+            const item = document.querySelector(`.sb-item[data-id="${remote.chatId}"]`);
+            item?.classList.add('generating');
+          }
         }
       } else if (base === 'capsules') {
         try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
