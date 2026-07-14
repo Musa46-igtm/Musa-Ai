@@ -310,12 +310,15 @@ function pushNotification(msg, type='', source='toast') {
   list.unshift(n);
   if (list.length > 100) list.length = 100;
   setNotifications(list);
-  bumpCloudVersion();
+  if (source !== 'replay') { // replayed notifications stay local — don’t echo back to cloud
+    bumpCloudVersion();
+    (async () => { try { await cloudPush(userKey('notifications'), list); } catch {} })();
+  }
   return n;
 }
-function toast(msg, type='', dur=3000) {
+function toast(msg, type='', dur=3000, _source='toast') {
   broadcastToast(msg, type); // mirror to same-browser tabs instantly
-  pushNotification(msg, type, 'toast');
+  pushNotification(msg, type, _source);
   document.querySelectorAll('.toast').forEach(t => { t.classList.remove('on'); t.remove(); });
   const t = document.createElement('div');
   t.className = 'toast' + (type ? ' ' + type : '');
@@ -329,10 +332,10 @@ function toast(msg, type='', dur=3000) {
 /* ════════════════════════════════════════
    DEV LOG + NOTIFICATION LOG
    ════════════════════════════════════════ */
-function devLog(msg, type='') {
+function devLog(msg, type='', _source='devlog') {
   if (currentMode !== 'dev' && currentMode !== 'root') return;
   broadcastDevLog(msg, type); // mirror to same-browser tabs instantly
-  pushNotification(msg, type, 'devlog');
+  pushNotification(msg, type, _source);
   const p = $('devPanel');
   const line = document.createElement('div');
   line.className = 'dev-log ' + (type || '');
@@ -637,9 +640,9 @@ async function replayRemoteNotifications() {
     const unseen = remote.filter(n => n.ts > seen);
     unseen.forEach(n => {
       if (n.source === 'devlog' && (currentMode === 'dev' || currentMode === 'root')) {
-        devLog(n.msg, n.type || '');
+        devLog(n.msg, n.type || '', 'replay');
       } else {
-        toast(n.msg, n.type || '');
+        toast(n.msg, n.type || '', 3000, 'replay');
       }
     });
     if (unseen.length) setLastNotifSeenTs(unseen[0].ts);
