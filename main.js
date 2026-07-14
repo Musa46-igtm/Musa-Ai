@@ -323,13 +323,13 @@ async function pushNotification(msg, type='', source='toast') {
 function toast(msg, type='', dur=3000, _source='toast', action=null) {
   broadcastToast(msg, type); // mirror to same-browser tabs instantly
   pushNotification(msg, type, _source);
-  document.querySelectorAll('.toast').forEach(t => { t.classList.remove('on'); t.remove(); });
-  const t = document.createElement('div');
-  t.className = 'toast' + (type ? ' ' + type : '');
-  const label = document.createElement('span');
-  label.textContent = msg;
-  t.appendChild(label);
   if (action && action.label && action.handler) {
+    document.querySelectorAll('.toast').forEach(t => { t.classList.remove('on'); t.remove(); });
+    const t = document.createElement('div');
+    t.className = 'toast' + (type ? ' ' + type : '');
+    const label = document.createElement('span');
+    label.textContent = msg;
+    t.appendChild(label);
     t.style.pointerEvents = 'auto';
     t.style.cursor = 'pointer';
     const act = document.createElement('span');
@@ -338,12 +338,20 @@ function toast(msg, type='', dur=3000, _source='toast', action=null) {
     act.addEventListener('click', e => { e.stopPropagation(); action.handler(); });
     t.appendChild(act);
     t.addEventListener('click', () => { action.handler(); });
+    document.body.appendChild(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('on')));
+    setTimeout(() => { t.classList.remove('on'); setTimeout(() => t.remove(), 300); }, dur);
   } else {
+    document.querySelectorAll('.toast').forEach(t => { t.classList.remove('on'); t.remove(); });
+    const t = document.createElement('div');
+    t.className = 'toast' + (type ? ' ' + type : '');
+    t.textContent = msg;
     t.style.pointerEvents = 'none';
+    document.body.appendChild(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('on')));
+    setTimeout(() => { t.classList.remove('on'); setTimeout(() => t.remove(), 300); }, dur);
   }
-  document.body.appendChild(t);
-  requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('on')));
-  setTimeout(() => { t.classList.remove('on'); setTimeout(() => t.remove(), 300); }, dur);
+  playNotifSound();
 }
 
 /* ════════════════════════════════════════
@@ -353,6 +361,7 @@ function devLog(msg, type='', _source='devlog') {
   if (currentMode !== 'dev' && currentMode !== 'root') return;
   broadcastDevLog(msg, type); // mirror to same-browser tabs instantly
   pushNotification(msg, type, _source);
+  playNotifSound();
   const entry = { msg, type, ts: Date.now() };
   const log = getDevLog();
   log.unshift(entry);
@@ -1067,6 +1076,54 @@ $('notifClear').onclick = clearNotifications;
 $('devSearchInput').addEventListener('input', () => renderDevLogFromStore());
 $('devExportBtn').onclick = exportDevLog;
 $('devClearBtn').onclick = clearDevLog;
+
+/* Notification sound toggle */
+function _notifSound() {
+  const raw = getSetting('notifSound', 'off');
+  if (raw === 'on') return 'on';
+  if (raw === 'custom' && getSetting('notifSoundUrl', '')) return 'custom';
+  return 'off';
+}
+function setNotifSound(mode) {
+  setSetting('notifSound', mode);
+  const btn = $('notifSoundBtn');
+  if (!btn) return;
+  const labels = { off:'Notification sound: Off', on:'Notification sound: On', custom:'Notification sound: Custom' };
+  btn.title = labels[mode] || 'Notification sound';
+  btn.classList.toggle('muted', mode === 'off');
+}
+function playNotifSound() {
+  const mode = _notifSound();
+  if (mode === 'off') return;
+  try {
+    const url = mode === 'custom' ? getSetting('notifSoundUrl', '') : '';
+    if (!window._notifAudio) {
+      window._notifAudio = new Audio(url || 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
+    } else if (url && window._notifAudio.src !== url) {
+      window._notifAudio.src = url;
+    }
+    const a = window._notifAudio;
+    a.currentTime = 0;
+    const p = a.play();
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  } catch {}
+}
+$('notifSoundBtn').onclick = () => {
+  const cur = _notifSound();
+  const next = cur === 'off' ? 'on' : (cur === 'on' ? 'custom' : 'off');
+  if (next === 'custom') {
+    const url = prompt('Paste custom notification sound URL (MP3/WAV):', getSetting('notifSoundUrl', '') || '');
+    if (url === null) return;
+    const trimmed = (url || '').trim();
+    if (!trimmed) { setNotifSound('on'); return; }
+    setSetting('notifSoundUrl', trimmed);
+    setNotifSound('custom');
+  } else {
+    setNotifSound(next);
+  }
+};
+/* Apply saved sound state on load */
+setNotifSound(_notifSound());
 
 /* ════════════════════════════════════════
    MODEL SELECTOR
