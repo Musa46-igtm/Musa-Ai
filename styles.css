@@ -649,6 +649,10 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
 .toast-action:hover { opacity:1; }
 #notifSoundBtn.muted { opacity:0.45; }
 #notifSoundBtn.muted svg { stroke: var(--text-3); }
+.presence-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); margin-left:8px; box-shadow:0 0 0 0 rgba(0,0,0,0); animation: presencePulse 1.8s ease-out infinite; }
+.presence-dot.on { background:var(--green); }
+.presence-dot.off { background:var(--text-3); animation:none; }
+@keyframes presencePulse { 0% { box-shadow:0 0 0 0 rgba(0,0,0,0); } 70% { box-shadow:0 0 0 6px rgba(0,0,0,0); } 100% { box-shadow:0 0 0 0 rgba(0,0,0,0); } }
 
 @keyframes spin { to { transform:rotate(360deg); } }
 .spin { width:14px; height:14px; border:2px solid var(--border-md); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; }
