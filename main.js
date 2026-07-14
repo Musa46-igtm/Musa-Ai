@@ -296,23 +296,26 @@ function relativeTime(iso) {
    TOAST + NOTIFICATION LOG
    ════════════════════════════════════════ */
 function getNotifications() { return getSetting('notifications', []); }
-function setNotifications(v) { setSetting('notifications', v); }
+function setNotifications(v) { localStorage.setItem(userKey('notifications'), JSON.stringify(v)); }
 function getLastNotifSeenTs() {
   try { return parseInt(localStorage.getItem(userKey('notifSeenTs')) || '0', 10); } catch { return 0; }
 }
 function setLastNotifSeenTs(ts) {
   try { localStorage.setItem(userKey('notifSeenTs'), String(ts)); } catch {}
 }
-function pushNotification(msg, type='', source='toast') {
+async function pushNotification(msg, type='', source='toast') {
   if (source === 'toast' && (msg === 'Dark mode' || msg === 'Light mode')) return; // local UX only
   const n = { id: 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), msg, type, source, ts: Date.now() };
-  const list = getNotifications();
-  list.unshift(n);
-  if (list.length > 100) list.length = 100;
-  setNotifications(list);
-  if (source !== 'replay') { // replayed notifications stay local — don’t echo back to cloud
+  const local = getNotifications();
+  let remote = [];
+  try { remote = (await cloudPull(userKey('notifications'))) || []; } catch {}
+  const byId = {};
+  [...remote, ...local].forEach(x => { if (x && x.id) byId[x.id] = x; });
+  const merged = Object.values(byId).sort((a, b) => b.ts - a.ts).slice(0, 100);
+  setNotifications(merged);
+  if (source !== 'replay') {
     bumpCloudVersion();
-    (async () => { try { await cloudPush(userKey('notifications'), list); } catch {} })();
+    await cloudPush(userKey('notifications'), merged);
   }
   return n;
 }
