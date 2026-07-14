@@ -234,7 +234,17 @@
     </button>
   </div>
 
-  <div class="dev-panel" id="devPanel"></div>
+  <div class="dev-panel" id="devPanel">
+    <div class="dev-hdr">
+      <span class="dev-title">Dev Log</span>
+      <div class="dev-actions">
+        <input type="text" id="devSearchInput" placeholder="Search…" />
+        <button id="devExportBtn" title="Export .txt">Export</button>
+        <button id="devClearBtn" title="Clear log">Clear</button>
+      </div>
+    </div>
+    <div class="dev-log" id="devLogList"></div>
+  </div>
 
   <div class="input-zone">
     <div class="chaos-banner" id="chaosBanner">

@@ -353,13 +353,23 @@ function devLog(msg, type='', _source='devlog') {
   if (currentMode !== 'dev' && currentMode !== 'root') return;
   broadcastDevLog(msg, type); // mirror to same-browser tabs instantly
   pushNotification(msg, type, _source);
-  const p = $('devPanel');
+  const entry = { msg, type, ts: Date.now() };
+  const log = getDevLog();
+  log.unshift(entry);
+  if (log.length > 500) log.length = 500;
+  setDevLog(log);
+  const p = $('devLogList');
+  if (!p) return;
   const line = document.createElement('div');
-  line.className = 'dev-log ' + (type || '');
-  line.textContent = '[' + new Date().toLocaleTimeString([], { timeZone:'Africa/Lagos' }) + '] ' + msg;
-  p.appendChild(line);
-  p.scrollTop = p.scrollHeight;
+  line.className = 'd-line dev-log ' + (type || '');
+  const d = new Date(entry.ts);
+  const time = d.toLocaleTimeString([], { timeZone:'Africa/Lagos', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  line.innerHTML = `<span class="d-time">${escapeHtml(time)}</span><span class="d-msg">${escapeHtml(msg)}</span>${type ? `<span class="d-type">${escapeHtml(type)}</span>` : ''}`;
+  p.insertBefore(line, p.firstChild);
+  p.scrollTop = 0;
 }
+function getDevLog() { return getSetting('devlog', []); }
+function setDevLog(v) { localStorage.setItem(userKey('devlog'), JSON.stringify(v)); }
 
 /* ════════════════════════════════════════
    NOTIFICATION INBOX
@@ -423,6 +433,49 @@ window._notifClick = function(id) {
   if (n) { setLastNotifSeenTs(Date.now()); renderNotifInbox(); }
 };
 
+/* Dev log helpers */
+function renderDevLogFromStore() {
+  const log = getDevLog();
+  const p = $('devLogList');
+  if (!p) return;
+  const q = ($('devSearchInput')?.value || '').trim().toLowerCase();
+  p.innerHTML = '';
+  const filtered = q ? log.filter(e => (e.msg + ' ' + (e.type || '')).toLowerCase().includes(q)) : log;
+  if (!filtered.length) { p.innerHTML = '<div class="dev-log" style="color:var(--text-3)">No entries</div>'; return; }
+  const frag = document.createDocumentFragment();
+  filtered.slice(0, 200).forEach(e => {
+    const d = new Date(e.ts);
+    const time = d.toLocaleTimeString([], { timeZone:'Africa/Lagos', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const line = document.createElement('div');
+    line.className = 'd-line dev-log ' + (e.type || '');
+    line.innerHTML = `<span class="d-time">${escapeHtml(time)}</span><span class="d-msg">${escapeHtml(e.msg)}</span>${e.type ? `<span class="d-type">${escapeHtml(e.type)}</span>` : ''}`;
+    frag.appendChild(line);
+  });
+  p.appendChild(frag);
+}
+function exportDevLog() {
+  const log = getDevLog();
+  if (!log.length) { toast('Dev log is empty', 'err'); return; }
+  const lines = log.map(e => {
+    const d = new Date(e.ts);
+    const time = d.toLocaleTimeString([], { timeZone:'Africa/Lagos', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    return `[${time}] [${(e.type || 'info').toUpperCase()}] ${e.msg}`;
+  }).join('\n');
+  const blob = new Blob([lines], { type:'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'devlog_' + new Date().toISOString().slice(0,10) + '.txt';
+  a.click();
+  toast('Dev log exported', 'ok');
+}
+function clearDevLog() {
+  setDevLog([]);
+  renderDevLogFromStore();
+  bumpCloudVersion();
+  cloudPush(userKey('devlog'), []);
+  toast('Dev log cleared', 'ok');
+}
+
 /* MODE SYSTEM */
 function setMode(m) {
   if (currentMode === m) return;
@@ -461,7 +514,7 @@ function updateModeUI(m) {
   $('backToNormBtn').style.display = m === 'norm' ? 'none' : 'flex';
   $('devPanel').classList.toggle('on', m === 'dev' || m === 'root');
   if (m === 'dev' || m === 'root') {
-    $('devPanel').innerHTML = '';
+    renderDevLogFromStore();
     devLog('Entered ' + m.toUpperCase() + ' mode', 'ok');
   }
   ['pmNorm','pmDev','pmRoot'].forEach(id => $(id).classList.remove('mode-active'));
@@ -619,7 +672,7 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs', 'devlog']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
       let local;
@@ -695,6 +748,18 @@ async function pullSettingsUsage() {
         b.forEach(c => { if (!byId[c.id]) { byId[c.id] = c; added++; } });
         const merged = Object.values(byId);
         localStorage.setItem(userKey(base), JSON.stringify(merged));
+      } else if (base === 'devlog') {
+        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
+        const a = Array.isArray(local) ? local : [];
+        const b = Array.isArray(remote) ? remote : [];
+        const byId = {};
+        a.forEach(e => { if (e && e.ts) byId[e.ts + '_' + e.msg] = e; });
+        b.forEach(e => { if (e && e.ts) byId[e.ts + '_' + e.msg] = e; });
+        const merged = Object.values(byId).sort((a, b) => b.ts - a.ts).slice(0, 500);
+        if (JSON.stringify(merged) !== JSON.stringify(local ?? [])) {
+          localStorage.setItem(userKey(base), JSON.stringify(merged));
+          renderDevLogFromStore();
+        }
       } else {
         try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
         if (JSON.stringify(remote) !== JSON.stringify(local ?? '')) {
@@ -999,6 +1064,9 @@ $('notifInboxBtn').onclick = () => { const el=$('notifInbox'); el.style.display 
 $('notifClose').onclick = closeNotifInbox;
 $('notifMarkRead').onclick = markNotifRead;
 $('notifClear').onclick = clearNotifications;
+$('devSearchInput').addEventListener('input', () => renderDevLogFromStore());
+$('devExportBtn').onclick = exportDevLog;
+$('devClearBtn').onclick = clearDevLog;
 
 /* ════════════════════════════════════════
    MODEL SELECTOR
