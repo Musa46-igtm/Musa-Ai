@@ -683,7 +683,10 @@ async function pullSettingsUsage() {
     // relying on the local sig would miss a CHANGE made on another device.
     for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs', 'devlog', 'branches', 'notifications']) {
       const remote = await cloudPull(userKey(base));
-      if (remote === null || remote === undefined) continue;
+      if (remote === null || remote === undefined) {
+        // For array keys, still render local state even if cloud has nothing yet.
+        if (!['capsules','devlog','notifications','branches'].includes(base)) continue;
+      }
       let local;
       if (base === 'theme') {
         local = getSetting('theme', null);
@@ -776,17 +779,17 @@ async function pullSettingsUsage() {
           renderDevLogFromStore();
         }
       } else if (base === 'notifications') {
-        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
-        const a = Array.isArray(local) ? local : [];
-        const b = Array.isArray(remote) ? remote : [];
-        const byId = {};
-        a.forEach(n => { if (n && n.id) byId[n.id] = n; });
-        b.forEach(n => { if (n && n.id) byId[n.id] = n; });
-        const merged = Object.values(byId).sort((a, b) => b.ts - a.ts).slice(0, 100);
-        if (JSON.stringify(merged) !== JSON.stringify(a)) {
-          localStorage.setItem(userKey(base), JSON.stringify(merged));
+          try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
+          const a = Array.isArray(local) ? local : []; const b = Array.isArray(remote) ? remote : [];
+          if (!a.length && !b.length) { if ($('notifList')) $('notifList').innerHTML = '<div class="n-empty">No notifications yet</div>'; updateNotifBadge(0); }
+          const byId = {};
+          a.forEach(n => { if (n && n.id) byId[n.id] = n; });
+          b.forEach(n => { if (n && n.id) byId[n.id] = n; });
+          const merged = Object.values(byId).sort((a, b) => b.ts - a.ts).slice(0, 100);
+          if (JSON.stringify(merged) !== JSON.stringify(a)) {
+            localStorage.setItem(userKey(base), JSON.stringify(merged));
+          }
           try { renderNotifInbox(); } catch {}
-        }
       } else if (base === 'branches') {
         try {
           const data = typeof remote === 'string' ? JSON.parse(remote) : remote;
