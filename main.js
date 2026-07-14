@@ -681,7 +681,7 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs', 'devlog', 'branches']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs', 'devlog', 'branches', 'notifications']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
       let local;
@@ -774,6 +774,18 @@ async function pullSettingsUsage() {
         if (JSON.stringify(merged) !== JSON.stringify(local ?? [])) {
           localStorage.setItem(userKey(base), JSON.stringify(merged));
           renderDevLogFromStore();
+        }
+      } else if (base === 'notifications') {
+        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
+        const a = Array.isArray(local) ? local : [];
+        const b = Array.isArray(remote) ? remote : [];
+        const byId = {};
+        a.forEach(n => { if (n && n.id) byId[n.id] = n; });
+        b.forEach(n => { if (n && n.id) byId[n.id] = n; });
+        const merged = Object.values(byId).sort((a, b) => b.ts - a.ts).slice(0, 100);
+        if (JSON.stringify(merged) !== JSON.stringify(a)) {
+          localStorage.setItem(userKey(base), JSON.stringify(merged));
+          try { renderNotifInbox(); } catch {}
         }
       } else if (base === 'branches') {
         try {
