@@ -681,7 +681,7 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs', 'devlog']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs', 'devlog', 'branches']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
       let local;
@@ -775,18 +775,32 @@ async function pullSettingsUsage() {
           localStorage.setItem(userKey(base), JSON.stringify(merged));
           renderDevLogFromStore();
         }
-      } else {
-        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
-        if (JSON.stringify(remote) !== JSON.stringify(local ?? '')) {
-          localStorage.setItem(userKey(base), JSON.stringify(remote));
-        }
+      } else if (base === 'branches') {
+        try {
+          const data = typeof remote === 'string' ? JSON.parse(remote) : remote;
+          if (data && chatId) {
+            const d = store();
+            const i = d.chats.findIndex(c => c.id === chatId);
+            if (i !== -1) {
+              d.chats[i].branches = Array.isArray(data.branches) ? data.branches : [];
+              d.chats[i].branchCounter = typeof data.branchCounter === 'number' ? data.branchCounter : d.chats[i].branchCounter || 0;
+              save(d);
+              syncUp();
+              loadBranchesFromStore();
+              if (activeBranch !== null && !branches.find(b => b.id === activeBranch)) {
+                switchToMain();
+              }
+              renderBranchBar();
+            }
+          }
+        } catch (e) { /* ignore malformed branch payload */ }
       }
     }
     /* Replay unseen notifications from other devices so toasts/devlogs live sync. */
     replayRemoteNotifications();
     /* Refresh any open capsule panel when a capsule arrives from another device. */
     if (typeof checkCapsules === 'function') checkCapsules();
-  } catch { /* cloud unavailable — keep local */ }
+  } catch (e) { /* cloud unavailable — keep local */ }
 }
 
 /* Pull the notification log from cloud, replay any entries newer than the
