@@ -304,6 +304,7 @@ function setLastNotifSeenTs(ts) {
   try { localStorage.setItem(userKey('notifSeenTs'), String(ts)); } catch {}
 }
 function pushNotification(msg, type='', source='toast') {
+  if (source === 'toast' && (msg === 'Dark mode' || msg === 'Light mode')) return; // local UX only
   const n = { id: 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), msg, type, source, ts: Date.now() };
   const list = getNotifications();
   list.unshift(n);
