@@ -649,6 +649,21 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .spin { width:14px; height:14px; border:2px solid var(--border-md); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; }
 
+/* ══════ NOTIFICATION INBOX ══════ */
+#notifInbox { font-family: inherit; }
+#notifInbox .n-item { display:flex; gap:10px; padding:10px 12px; border-radius:var(--r-md); border:1px solid var(--border); background:var(--bg-1); margin-bottom:8px; transition:background var(--dur); cursor:pointer; }
+#notifInbox .n-item:hover { background:var(--bg-hover); }
+#notifInbox .n-item.unseen { border-left:3px solid var(--accent); }
+#notifInbox .n-item .n-time { font-size:11px; color:var(--text-3); white-space:nowrap; margin-top:2px; }
+#notifInbox .n-item .n-body { flex:1; }
+#notifInbox .n-item .n-msg { font-size:13px; color:var(--text-0); line-height:1.35; }
+#notifInbox .n-item .n-meta { display:flex; gap:6px; align-items:center; margin-top:4px; }
+#notifInbox .n-item .n-type { font-size:10px; text-transform:uppercase; letter-spacing:0.06em; padding:2px 6px; border-radius:99px; background:var(--bg-hover-strong); color:var(--text-2); }
+#notifInbox .n-empty { text-align:center; color:var(--text-3); font-size:13px; padding:40px 10px; }
+.badge { display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 4px; border-radius:99px; background:var(--accent); color:#fff; font-size:10px; font-weight:700; margin-left:4px; }
+
+@keyframes slideInRight { from { transform:translateX(30px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+
 /* Time Capsule */
 .tc-card {
   background: var(--bg-1); border: 1px solid var(--border-md); border-radius: var(--r-lg);

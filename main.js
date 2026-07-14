@@ -317,6 +317,7 @@ async function pushNotification(msg, type='', source='toast') {
     bumpCloudVersion();
     await cloudPush(userKey('notifications'), merged);
   }
+  try { renderNotifInbox(); } catch {}
   return n;
 }
 function toast(msg, type='', dur=3000, _source='toast') {
@@ -348,8 +349,64 @@ function devLog(msg, type='', _source='devlog') {
 }
 
 /* ════════════════════════════════════════
-   MODE SYSTEM
+   NOTIFICATION INBOX
    ════════════════════════════════════════ */
+function renderNotifInbox() {
+  const list = getNotifications();
+  const seenTs = getLastNotifSeenTs();
+  const container = $('notifList');
+  if (!container) return;
+  if (!list.length) { container.innerHTML = '<div class="n-empty">No notifications yet</div>'; updateNotifBadge(0); return; }
+  const unseen = list.filter(n => n.ts > seenTs).length;
+  updateNotifBadge(unseen);
+  container.innerHTML = list.map(n => {
+    const d = new Date(n.ts);
+    const time = d.toLocaleTimeString([], { timeZone:'Africa/Lagos', hour:'2-digit', minute:'2-digit' });
+    const date = d.toLocaleDateString([], { timeZone:'Africa/Lagos', month:'short', day:'numeric' });
+    const unsee = n.ts > seenTs ? 'unseen' : '';
+    return `<div class="n-item ${unsee}" data-id="${n.id}" onclick="window._notifClick&&window._notifClick('${n.id}')">
+      <div class="n-body">
+        <div class="n-msg">${escapeHtml(n.msg)}</div>
+        <div class="n-meta"><span class="n-type">${escapeHtml(n.source || 'toast')}</span><span>${date} ${time}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function updateNotifBadge(count) {
+  const badge = $('notifBadge');
+  if (!badge) return;
+  badge.textContent = count;
+  badge.style.display = count > 0 ? 'inline-flex' : 'none';
+}
+function openNotifInbox() {
+  const el = $('notifInbox');
+  if (!el) return;
+  el.style.display = 'flex';
+  setLastNotifSeenTs(Date.now());
+  renderNotifInbox();
+}
+function closeNotifInbox() {
+  const el = $('notifInbox');
+  if (el) el.style.display = 'none';
+}
+function markNotifRead() {
+  setLastNotifSeenTs(Date.now());
+  renderNotifInbox();
+}
+function clearNotifications() {
+  setNotifications([]);
+  setLastNotifSeenTs(Date.now());
+  renderNotifInbox();
+  bumpCloudVersion();
+  cloudPush(userKey('notifications'), []);
+}
+function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+window._notifClick = function(id) {
+  const n = getNotifications().find(x => x.id === id);
+  if (n) { setLastNotifSeenTs(Date.now()); renderNotifInbox(); }
+};
+
+/* MODE SYSTEM */
 function setMode(m) {
   if (currentMode === m) return;
   /* Switching modes starts a fresh chat (matches the original behaviour).
@@ -649,6 +706,7 @@ async function replayRemoteNotifications() {
       }
     });
     if (unseen.length) setLastNotifSeenTs(unseen[0].ts);
+    try { renderNotifInbox(); } catch {}
   } catch { /* cloud unavailable for notifications — skip */ }
 }
 /* Cross-device delete: mark the id as tombstoned everywhere, drop it
@@ -915,6 +973,10 @@ async function toggleTheme() {
 }
 $('themeBtn').onclick = toggleTheme;
 $('pmTheme').onclick = () => { toggleTheme(); $('pmenu').classList.remove('on'); };
+$('notifInboxBtn').onclick = () => { const el=$('notifInbox'); el.style.display = el.style.display==='flex' ? 'none' : 'flex'; if(el.style.display==='flex'){ setLastNotifSeenTs(Date.now()); renderNotifInbox(); } };
+$('notifClose').onclick = closeNotifInbox;
+$('notifMarkRead').onclick = markNotifRead;
+$('notifClear').onclick = clearNotifications;
 
 /* ════════════════════════════════════════
    MODEL SELECTOR
