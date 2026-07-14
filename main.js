@@ -1829,7 +1829,8 @@ function renderActiveChat() {
   const sameCount = msgs.length === chatMsgs.length;
   const lastSame = sameCount && msgs.length > 0 &&
     JSON.stringify(msgs[msgs.length - 1]) === JSON.stringify(chatMsgs[chatMsgs.length - 1]);
-  if (sameCount && lastSame) return; // nothing new for this open chat
+  const stillGenerating = busy && chatMsgs.length > 0 && chatMsgs[chatMsgs.length - 1].role === 'user';
+  if (sameCount && lastSame && !stillGenerating) return; // nothing new for this open chat
   chatMsgs = [...msgs];
   $('chat').innerHTML = '';
   msgs.forEach((m, i) => renderMsg(m.text, m.role, false, m.img, m.tone, i, false, m.ts || null, m.model || null));
