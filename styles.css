@@ -645,6 +645,8 @@ body[data-theme="light"] .msg-prose pre { background:#2d2c2a; }
 .toast.on { transform:translateX(-50%) translateY(0); opacity:1; }
 .toast.err { background:var(--red); color:#fff; }
 .toast.ok  { background:var(--green); color:#fff; }
+.toast-action { margin-left:10px; font-size:11px; text-decoration:underline; opacity:0.85; }
+.toast-action:hover { opacity:1; }
 
 @keyframes spin { to { transform:rotate(360deg); } }
 .spin { width:14px; height:14px; border:2px solid var(--border-md); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; }

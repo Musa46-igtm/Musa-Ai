@@ -320,14 +320,27 @@ async function pushNotification(msg, type='', source='toast') {
   try { renderNotifInbox(); } catch {}
   return n;
 }
-function toast(msg, type='', dur=3000, _source='toast') {
+function toast(msg, type='', dur=3000, _source='toast', action=null) {
   broadcastToast(msg, type); // mirror to same-browser tabs instantly
   pushNotification(msg, type, _source);
   document.querySelectorAll('.toast').forEach(t => { t.classList.remove('on'); t.remove(); });
   const t = document.createElement('div');
   t.className = 'toast' + (type ? ' ' + type : '');
-  t.textContent = msg;
-  t.style.pointerEvents = 'none';
+  const label = document.createElement('span');
+  label.textContent = msg;
+  t.appendChild(label);
+  if (action && action.label && action.handler) {
+    t.style.pointerEvents = 'auto';
+    t.style.cursor = 'pointer';
+    const act = document.createElement('span');
+    act.className = 'toast-action';
+    act.textContent = action.label;
+    act.addEventListener('click', e => { e.stopPropagation(); action.handler(); });
+    t.appendChild(act);
+    t.addEventListener('click', () => { action.handler(); });
+  } else {
+    t.style.pointerEvents = 'none';
+  }
   document.body.appendChild(t);
   requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('on')));
   setTimeout(() => { t.classList.remove('on'); setTimeout(() => t.remove(), 300); }, dur);
@@ -1007,7 +1020,7 @@ $('modelDrop').addEventListener('click', e => {
   opt.classList.add('selected');
   $('modelDrop').classList.remove('on');
   devLog('Model switched to ' + label);
-  toast('Model: ' + label);
+  toast('Model: ' + label, '', 3000, 'toast', { label:'Change', handler: () => { const btn=$('modelBtn'); if(btn){ btn.click(); } } });
 });
 
 /* ── Rate-limit helpers ─────────────────────── */
@@ -1024,7 +1037,7 @@ function markGpt4oLimited() {
   $('modelDot').className = 'model-dot musa';
   document.querySelectorAll('.model-opt').forEach(o => o.classList.remove('selected'));
   const miniOpt = $('modelOptMini'); if (miniOpt) miniOpt.classList.add('selected');
-  toast('GPT-4o limit reached — switched to Mini automatically', 'err');
+  toast('GPT-4o limit reached — switched to Mini automatically', 'err', 5000, 'toast', { label:'Retry', handler: () => { const opt4o = $('modelOpt4o'); if (opt4o) opt4o.click(); } });
   updateRateLimitChip();
   /* Restore after 5 minutes */
   clearTimeout(_limitRestoreTimer);
@@ -1323,7 +1336,7 @@ function forkAtIndex(forkIndex) {
   saveBranchesToStore();
   cloudPush(userKey('branches'), JSON.stringify({ branches, branchCounter }));
   broadcastChange();
-  toast(`Branch ${br.name} created`, 'ok');
+  toast(`Branch ${br.name} created`, 'ok', 3000, 'toast', { label:'View', handler: () => switchToBranch(br.id) });
   broadcastToast(`Branch ${br.name} created`, 'ok');
   devLog('Forked at message index ' + forkIndex);
 }
@@ -1401,7 +1414,7 @@ function switchToMain() {
   chatMsgs = getMainMsgs();
   rebuildChatFromMsgs(chatMsgs, null);
   renderBranchBar();
-  toast('↩ Switched to main thread');
+  toast('↩ Switched to main thread', '', 3000, 'toast', { label:'Main', handler: switchToMain });
   broadcastToast('↩ Switched to main thread');
   broadcastChange(); // instant same-browser sync
 }
@@ -1418,7 +1431,7 @@ function switchToBranch(brId) {
   chatMsgs = [...br.msgs];
   rebuildChatForBranch(br);
   renderBranchBar();
-  toast(`Switched to ${br.name}`);
+  toast(`Switched to ${br.name}`, '', 3000, 'toast', { label:'View', handler: () => { /* already on branch */ } });
   broadcastToast(`Switched to ${br.name}`);
   broadcastChange(); // instant same-browser sync
 }
