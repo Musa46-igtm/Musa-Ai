@@ -390,12 +390,16 @@ function closeNotifInbox() {
   if (el) el.style.display = 'none';
 }
 function markNotifRead() {
-  setLastNotifSeenTs(Date.now());
+  const ts = Date.now();
+  setLastNotifSeenTs(ts);
+  cloudPush(userKey('notifSeenTs'), ts); // explicit sync on user action
   renderNotifInbox();
 }
 function clearNotifications() {
   setNotifications([]);
-  setLastNotifSeenTs(Date.now());
+  const ts = Date.now();
+  setLastNotifSeenTs(ts);
+  cloudPush(userKey('notifSeenTs'), ts); // explicit sync on user action
   renderNotifInbox();
   bumpCloudVersion();
   cloudPush(userKey('notifications'), []);
@@ -602,7 +606,7 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating']) {
+    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs']) {
       const remote = await cloudPull(userKey(base));
       if (remote === null || remote === undefined) continue;
       let local;
@@ -664,6 +668,11 @@ async function pullSettingsUsage() {
             const item = document.querySelector(`.sb-item[data-id="${remote.chatId}"]`);
             item?.classList.add('generating');
           }
+        }
+      } else if (base === 'notifSeenTs') {
+        if (typeof remote === 'number' && remote !== getLastNotifSeenTs()) {
+          setLastNotifSeenTs(remote);
+          try { renderNotifInbox(); } catch {}
         }
       } else if (base === 'capsules') {
         try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
