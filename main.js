@@ -743,6 +743,12 @@ async function pullSettingsUsage() {
             const item = document.querySelector(`.sb-item[data-id="${remote.chatId}"]`);
             item?.classList.add('generating');
           }
+          const dot = $('presenceIndicator');
+          if (dot) {
+            dot.style.display = remote.busy ? 'inline-flex' : 'none';
+            dot.className = 'presence-dot ' + (remote.busy ? 'on' : 'off');
+            dot.title = remote.busy ? 'Generating on another device' : 'No remote activity';
+          }
         }
       } else if (base === 'notifSeenTs') {
         if (typeof remote === 'number' && remote !== getLastNotifSeenTs()) {
