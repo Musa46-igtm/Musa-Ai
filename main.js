@@ -1227,7 +1227,6 @@ function forkAtIndex(forkIndex) {
   rebuildChatForBranch(br);
   renderBranchBar();
   saveBranchesToStore();
-  cloudPush(userKey('branches'), JSON.stringify({ branches, branchCounter }));
   broadcastChange();
   toast(`Branch ${br.name} created`, 'ok', 3000, 'toast', { label:'View', handler: () => switchToBranch(br.id) });
   broadcastToast(`Branch ${br.name} created`, 'ok');
@@ -1339,7 +1338,6 @@ function deleteBranch(brId) {
   }, 0);
   branchCounter = maxNum;
   saveBranchesToStore();
-  cloudPush(userKey('branches'), JSON.stringify({ branches, branchCounter }));
   broadcastChange();
   renderBranchBar();
   toast('Branch deleted', 'ok');
