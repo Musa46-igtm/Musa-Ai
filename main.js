@@ -292,37 +292,8 @@ function relativeTime(iso) {
   return new Date(iso).toLocaleDateString([], {month:'short', day:'numeric', timeZone:'Africa/Lagos'});
 }
 
-/* ════════════════════════════════════════
-   TOAST + NOTIFICATION LOG
-   ════════════════════════════════════════ */
-function getNotifications() { return getSetting('notifications', []); }
-function setNotifications(v) { localStorage.setItem(userKey('notifications'), JSON.stringify(v)); }
-function getLastNotifSeenTs() {
-  try { return parseInt(localStorage.getItem(userKey('notifSeenTs')) || '0', 10); } catch { return 0; }
-}
-function setLastNotifSeenTs(ts) {
-  try { localStorage.setItem(userKey('notifSeenTs'), String(ts)); } catch {}
-}
-async function pushNotification(msg, type='', source='toast') {
-  if (source === 'toast' && (msg === 'Dark mode' || msg === 'Light mode')) return; // local UX only
-  const n = { id: 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), msg, type, source, ts: Date.now() };
-  const local = getNotifications();
-  let remote = [];
-  try { remote = (await cloudPull(userKey('notifications'))) || []; } catch {}
-  const byId = {};
-  [...remote, ...local].forEach(x => { if (x && x.id) byId[x.id] = x; });
-  const merged = Object.values(byId).sort((a, b) => b.ts - a.ts).slice(0, 100);
-  setNotifications(merged);
-  if (source !== 'replay') {
-    bumpCloudVersion();
-    await cloudPush(userKey('notifications'), merged);
-  }
-  try { renderNotifInbox(); } catch {}
-  return n;
-}
 function toast(msg, type='', dur=3000, _source='toast', action=null) {
   broadcastToast(msg, type); // mirror to same-browser tabs instantly
-  pushNotification(msg, type, _source);
   if (action && action.label && action.handler) {
     document.querySelectorAll('.toast').forEach(t => { t.classList.remove('on'); t.remove(); });
     const t = document.createElement('div');
@@ -351,17 +322,15 @@ function toast(msg, type='', dur=3000, _source='toast', action=null) {
     requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('on')));
     setTimeout(() => { t.classList.remove('on'); setTimeout(() => t.remove(), 300); }, dur);
   }
-  playNotifSound();
 }
 
 /* ════════════════════════════════════════
    DEV LOG + NOTIFICATION LOG
    ════════════════════════════════════════ */
+/* Notifications removed from Musa-Ai per 2026-07-16 whitelist. Dev log stays local-only. */
 function devLog(msg, type='', _source='devlog') {
   if (currentMode !== 'dev' && currentMode !== 'root') return;
   broadcastDevLog(msg, type); // mirror to same-browser tabs instantly
-  pushNotification(msg, type, _source);
-  playNotifSound();
   const entry = { msg, type, ts: Date.now() };
   const log = getDevLog();
   log.unshift(entry);
@@ -380,67 +349,7 @@ function devLog(msg, type='', _source='devlog') {
 function getDevLog() { return getSetting('devlog', []); }
 function setDevLog(v) { localStorage.setItem(userKey('devlog'), JSON.stringify(v)); }
 
-/* ════════════════════════════════════════
-   NOTIFICATION INBOX
-   ════════════════════════════════════════ */
-function renderNotifInbox() {
-  const list = getNotifications();
-  const seenTs = getLastNotifSeenTs();
-  const container = $('notifList');
-  if (!container) return;
-  if (!list.length) { container.innerHTML = '<div class="n-empty">No notifications yet</div>'; updateNotifBadge(0); return; }
-  const unseen = list.filter(n => n.ts > seenTs).length;
-  updateNotifBadge(unseen);
-  container.innerHTML = list.map(n => {
-    const d = new Date(n.ts);
-    const time = d.toLocaleTimeString([], { timeZone:'Africa/Lagos', hour:'2-digit', minute:'2-digit' });
-    const date = d.toLocaleDateString([], { timeZone:'Africa/Lagos', month:'short', day:'numeric' });
-    const unsee = n.ts > seenTs ? 'unseen' : '';
-    return `<div class="n-item ${unsee}" data-id="${n.id}" onclick="window._notifClick&&window._notifClick('${n.id}')">
-      <div class="n-body">
-        <div class="n-msg">${escapeHtml(n.msg)}</div>
-        <div class="n-meta"><span class="n-type">${escapeHtml(n.source || 'toast')}</span><span>${date} ${time}</span></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-function updateNotifBadge(count) {
-  const badge = $('notifBadge');
-  if (!badge) return;
-  badge.textContent = count;
-  badge.style.display = count > 0 ? 'inline-flex' : 'none';
-}
-function openNotifInbox() {
-  const el = $('notifInbox');
-  if (!el) return;
-  el.style.display = 'flex';
-  setLastNotifSeenTs(Date.now());
-  renderNotifInbox();
-}
-function closeNotifInbox() {
-  const el = $('notifInbox');
-  if (el) el.style.display = 'none';
-}
-function markNotifRead() {
-  const ts = Date.now();
-  setLastNotifSeenTs(ts);
-  cloudPush(userKey('notifSeenTs'), ts); // explicit sync on user action
-  renderNotifInbox();
-}
-function clearNotifications() {
-  setNotifications([]);
-  const ts = Date.now();
-  setLastNotifSeenTs(ts);
-  cloudPush(userKey('notifSeenTs'), ts); // explicit sync on user action
-  renderNotifInbox();
-  bumpCloudVersion();
-  cloudPush(userKey('notifications'), []);
-}
 function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-window._notifClick = function(id) {
-  const n = getNotifications().find(x => x.id === id);
-  if (n) { setLastNotifSeenTs(Date.now()); renderNotifInbox(); }
-};
 
 /* Dev log helpers */
 function renderDevLogFromStore() {
@@ -681,12 +590,9 @@ async function pullSettingsUsage() {
     // Per-user settings (memory, system prompt, capsules) — always re-pull;
     // the per-key comparisons below prevent redundant writes/re-renders, and
     // relying on the local sig would miss a CHANGE made on another device.
-    for (const base of ['notes', 'sysprompt', 'capsules', 'theme', 'mode', 'tone', 'chaos', 'model', 'activeBranch', 'generating', 'notifSeenTs', 'devlog', 'branches', 'notifications']) {
+    for (const base of ['theme', 'rate limit', 'mode', 'tools']) {
       const remote = await cloudPull(userKey(base));
-      if (remote === null || remote === undefined) {
-        // For array keys, still render local state even if cloud has nothing yet.
-        if (!['capsules','devlog','notifications','branches'].includes(base)) continue;
-      }
+      if (remote === null || remote === undefined) continue;
       let local;
       if (base === 'theme') {
         local = getSetting('theme', null);
@@ -705,141 +611,23 @@ async function pullSettingsUsage() {
         if (remote && ['norm','dev','root'].includes(remote) && remote !== currentMode) {
           setMode(remote);
         }
-      } else if (base === 'tone') {
-        if (remote && remote !== currentTone) {
-          currentTone = remote;
-          const ind = $('toneIndicator'); if (ind) ind.style.background = (TONES[currentTone] || {}).color || '';
-          document.querySelectorAll('.tone-opt').forEach(o => o.classList.toggle('active', o.dataset.tone === currentTone));
-          toast('Tone: ' + (TONES[currentTone] || {}).label || currentTone);
+      } else if (base === 'rate limit') {
+        if (typeof remote === 'number' && remote !== window._remoteRateLimitMs) {
+          window._remoteRateLimitMs = remote;
+          renderUsageMeter(true);
         }
-      } else if (base === 'chaos') {
-        if (typeof remote === 'boolean' && remote !== chaosMode) {
-          chaosMode = remote;
-          const btn = $('chaosToggleBtn'); if (btn) btn.classList.toggle('active', chaosMode);
-          toast(chaosMode ? 'Chaos Mode ON' : 'Chaos Mode OFF');
+      } else if (base === 'tools') {
+        if (Array.isArray(remote) && JSON.stringify(remote) !== JSON.stringify(availableTools)) {
+          availableTools = remote;
+          renderToolsPanel();
         }
-      } else if (base === 'model') {
-        if (remote && remote !== selectedModel) {
-          selectedModel = remote;
-          const label = MODELS[selectedModel] ? MODELS[selectedModel].label : selectedModel;
-          const lbl = $('modelLabel'); if (lbl) lbl.textContent = label;
-          const dot = $('modelDot'); if (dot) dot.className = 'model-dot ' + (MODELS[selectedModel] ? MODELS[selectedModel].dot : 'musa');
-          document.querySelectorAll('.model-opt').forEach(o => o.classList.toggle('selected', o.dataset.model === selectedModel));
-          toast('Model: ' + label);
-        }
-      } else if (base === 'activeBranch') {
-        if (remote === null || remote === undefined) {
-          if (activeBranch !== null) { activeBranch = null; switchToMain(); }
-        } else if (remote !== activeBranch) {
-          activeBranch = remote;
-          const chat = store().chats.find(c => c.id === chatId);
-          if (chat) {
-            const br = (chat.branches || []).find(b => b.id === activeBranch);
-            if (br) { switchToBranch(br.id); }
-            else { activeBranch = null; switchToMain(); } // remote branch was deleted
-          }
-        }
-      } else if (base === 'generating') {
-        if (remote && typeof remote === 'object') {
-          document.querySelectorAll('.sb-item.generating').forEach(el => el.classList.remove('generating'));
-          if (remote.busy && remote.chatId) {
-            const item = document.querySelector(`.sb-item[data-id="${remote.chatId}"]`);
-            item?.classList.add('generating');
-          }
-          const dot = $('presenceIndicator');
-          if (dot) {
-            dot.style.display = remote.busy ? 'inline-flex' : 'none';
-            dot.className = 'presence-dot ' + (remote.busy ? 'on' : 'off');
-            dot.title = remote.busy ? 'Generating on another device' : 'No remote activity';
-          }
-        }
-      } else if (base === 'notifSeenTs') {
-        if (typeof remote === 'number' && remote !== getLastNotifSeenTs()) {
-          setLastNotifSeenTs(remote);
-          try { renderNotifInbox(); } catch {}
-        }
-      } else if (base === 'capsules') {
-        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
-        const a = Array.isArray(local) ? local : [];
-        const b = Array.isArray(remote) ? remote : [];
-        const byId = {}; a.forEach(c => byId[c.id] = c); let added = 0;
-        b.forEach(c => { if (!byId[c.id]) { byId[c.id] = c; added++; } });
-        const merged = Object.values(byId);
-        localStorage.setItem(userKey(base), JSON.stringify(merged));
-      } else if (base === 'devlog') {
-        try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
-        const a = Array.isArray(local) ? local : [];
-        const b = Array.isArray(remote) ? remote : [];
-        const byId = {};
-        a.forEach(e => { if (e && e.ts) byId[e.ts + '_' + e.msg] = e; });
-        b.forEach(e => { if (e && e.ts) byId[e.ts + '_' + e.msg] = e; });
-        const merged = Object.values(byId).sort((a, b) => b.ts - a.ts).slice(0, 500);
-        if (JSON.stringify(merged) !== JSON.stringify(local ?? [])) {
-          localStorage.setItem(userKey(base), JSON.stringify(merged));
-          renderDevLogFromStore();
-        }
-      } else if (base === 'notifications') {
-          try { local = JSON.parse(localStorage.getItem(userKey(base))); } catch { local = null; }
-          const a = Array.isArray(local) ? local : []; const b = Array.isArray(remote) ? remote : [];
-          if (!a.length && !b.length) { if ($('notifList')) $('notifList').innerHTML = '<div class="n-empty">No notifications yet</div>'; updateNotifBadge(0); }
-          const byId = {};
-          a.forEach(n => { if (n && n.id) byId[n.id] = n; });
-          b.forEach(n => { if (n && n.id) byId[n.id] = n; });
-          const merged = Object.values(byId).sort((a, b) => b.ts - a.ts).slice(0, 100);
-          if (JSON.stringify(merged) !== JSON.stringify(a)) {
-            localStorage.setItem(userKey(base), JSON.stringify(merged));
-          }
-          try { renderNotifInbox(); } catch {}
-      } else if (base === 'branches') {
-        try {
-          const data = typeof remote === 'string' ? JSON.parse(remote) : remote;
-          if (data && chatId) {
-            const d = store();
-            const i = d.chats.findIndex(c => c.id === chatId);
-            if (i !== -1) {
-              d.chats[i].branches = Array.isArray(data.branches) ? data.branches : [];
-              d.chats[i].branchCounter = typeof data.branchCounter === 'number' ? data.branchCounter : d.chats[i].branchCounter || 0;
-              save(d);
-              syncUp();
-              loadBranchesFromStore();
-              if (activeBranch !== null && !branches.find(b => b.id === activeBranch)) {
-                switchToMain();
-              }
-              renderBranchBar();
-            }
-          }
-        } catch (e) { /* ignore malformed branch payload */ }
       }
     }
-    /* Replay unseen notifications from other devices so toasts/devlogs live sync. */
-    replayRemoteNotifications();
     /* Refresh any open capsule panel when a capsule arrives from another device. */
     if (typeof checkCapsules === 'function') checkCapsules();
   } catch (e) { /* cloud unavailable — keep local */ }
 }
 
-/* Pull the notification log from cloud, replay any entries newer than the
-   last timestamp this device has seen, then advance the seen cursor.
-   This makes every toast/devlog visible on all devices with the same 3s
-   latency as the rest of the live-sync stack. */
-async function replayRemoteNotifications() {
-  if (!user || !window.puter || typeof puter.kv?.get !== 'function') return;
-  try {
-    const remote = await cloudPull(userKey('notifications'));
-    if (!remote || !Array.isArray(remote)) return;
-    const seen = getLastNotifSeenTs();
-    const unseen = remote.filter(n => n.ts > seen);
-    unseen.forEach(n => {
-      if (n.source === 'devlog' && (currentMode === 'dev' || currentMode === 'root')) {
-        devLog(n.msg, n.type || '', 'replay');
-      } else {
-        toast(n.msg, n.type || '', 3000, 'replay');
-      }
-    });
-    if (unseen.length) setLastNotifSeenTs(unseen[0].ts);
-    try { renderNotifInbox(); } catch {}
-  } catch { /* cloud unavailable for notifications — skip */ }
-}
 /* Cross-device delete: mark the id as tombstoned everywhere, drop it
    locally, and push immediately. The live-sync loop (below) then
    propagates it to every other device. */
@@ -1030,10 +818,6 @@ async function authOK(id) {
   checkCapsules();
   renderUsageMeter();
   
-  // Apply user-specific font size
-  const savedFS = localStorage.getItem('musa_fontsize_' + user);
-  if (savedFS) applyFontSize(parseInt(savedFS));
-
   // Repair any stuck "Naming..." titles
   const d = store();
   if (d.chats.some(c => c.title === 'Naming...')) {
@@ -1104,61 +888,10 @@ async function toggleTheme() {
 }
 $('themeBtn').onclick = toggleTheme;
 $('pmTheme').onclick = () => { toggleTheme(); $('pmenu').classList.remove('on'); };
-$('notifInboxBtn').onclick = () => { const el=$('notifInbox'); el.style.display = el.style.display==='flex' ? 'none' : 'flex'; if(el.style.display==='flex'){ setLastNotifSeenTs(Date.now()); renderNotifInbox(); } };
-$('notifClose').onclick = closeNotifInbox;
-$('notifMarkRead').onclick = markNotifRead;
-$('notifClear').onclick = clearNotifications;
+
 $('devSearchInput').addEventListener('input', () => renderDevLogFromStore());
 $('devExportBtn').onclick = exportDevLog;
 $('devClearBtn').onclick = clearDevLog;
-
-/* Notification sound toggle */
-function _notifSound() {
-  const raw = getSetting('notifSound', 'off');
-  if (raw === 'on') return 'on';
-  if (raw === 'custom' && getSetting('notifSoundUrl', '')) return 'custom';
-  return 'off';
-}
-function setNotifSound(mode) {
-  setSetting('notifSound', mode);
-  const btn = $('notifSoundBtn');
-  if (!btn) return;
-  const labels = { off:'Notification sound: Off', on:'Notification sound: On', custom:'Notification sound: Custom' };
-  btn.title = labels[mode] || 'Notification sound';
-  btn.classList.toggle('muted', mode === 'off');
-}
-function playNotifSound() {
-  const mode = _notifSound();
-  if (mode === 'off') return;
-  try {
-    const url = mode === 'custom' ? getSetting('notifSoundUrl', '') : '';
-    if (!window._notifAudio) {
-      window._notifAudio = new Audio(url || 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
-    } else if (url && window._notifAudio.src !== url) {
-      window._notifAudio.src = url;
-    }
-    const a = window._notifAudio;
-    a.currentTime = 0;
-    const p = a.play();
-    if (p && typeof p.catch === 'function') p.catch(() => {});
-  } catch {}
-}
-$('notifSoundBtn').onclick = () => {
-  const cur = _notifSound();
-  const next = cur === 'off' ? 'on' : (cur === 'on' ? 'custom' : 'off');
-  if (next === 'custom') {
-    const url = prompt('Paste custom notification sound URL (MP3/WAV):', getSetting('notifSoundUrl', '') || '');
-    if (url === null) return;
-    const trimmed = (url || '').trim();
-    if (!trimmed) { setNotifSound('on'); return; }
-    setSetting('notifSoundUrl', trimmed);
-    setNotifSound('custom');
-  } else {
-    setNotifSound(next);
-  }
-};
-/* Apply saved sound state on load */
-setNotifSound(_notifSound());
 
 /* ════════════════════════════════════════
    MODEL SELECTOR
@@ -3019,18 +2752,8 @@ function checkCapsules() {
 
     /* ── Browser notification (works when tab is in background) ── */
     if ('Notification' in window && Notification.permission === 'granted') {
-      try {
-        const preview = c.text.length > 100 ? c.text.slice(0, 100) + '…' : c.text;
-        const n = new Notification('🕰 Time Capsule Arrived', {
-          body: `Written ${new Date(c.createdAt).toLocaleDateString([], { timeZone:'Africa/Lagos' })}: "${preview}"`,
-          tag: 'musa-capsule-' + c.id,
-          requireInteraction: true
-        });
-        n.onclick = () => { window.focus(); n.close(); };
-      } catch(e) { /* notifications not available */ }
+      /* Browser notifications removed — use in-app banner only. */
     }
-
-    if (busy) return true; /* AI busy — keep, deliver at next check */
 
     /* ── Polished in-app arrival banner ── */
     const writtenDate = new Date(c.createdAt).toLocaleString([], { dateStyle:'long', timeStyle:'short', timeZone:'Africa/Lagos' });
